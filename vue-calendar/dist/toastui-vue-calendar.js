@@ -6531,7 +6531,7 @@
     Day2[Day2["SAT"] = 6] = "SAT";
     return Day2;
   })(Day$2 || {});
-  const WEEK_DAYS = 7;
+  const WEEK_DAYS = 28;
   const dateFormatRx = /^(\d{4}[-|/]*\d{2}[-|/]*\d{2})\s?(\d{2}:\d{2}:\d{2})?$/;
   const memo = {
     millisecondsTo: {},
@@ -6730,7 +6730,7 @@
     const uniformWidth = 100 / days;
     const wideWidth = days > limitDaysToApplyNarrowWeekend ? 100 / (days - 1) : uniformWidth;
     let accumulatedWidth = 0;
-    const dates = range_1(startDayOfWeek, 7).concat(range_1(days)).slice(0, 7);
+    const dates = range_1(startDayOfWeek, WEEK_DAYS).concat(range_1(days)).slice(0, WEEK_DAYS);
     narrowWeekend = workweek ? false : narrowWeekend;
     const rowStyleInfo = dates.map((day) => {
       let width = narrowWeekend ? wideWidth : uniformWidth;
