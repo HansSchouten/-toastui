@@ -1,0 +1,103 @@
+{
+  "_from": "@toast-ui/vue-calendar",
+  "_id": "@toast-ui/vue-calendar@2.0.5",
+  "_inBundle": false,
+  "_integrity": "sha512-SDVoihWjRtvnHO26bkNuS0tA7qzGmy8TkdnssWMeeyKEmbcMrM51GfBPnhB4PoWvyiV+JfOMG8fVgeaK75XEaA==",
+  "_location": "/@toast-ui/vue-calendar",
+  "_phantomChildren": {},
+  "_requested": {
+    "type": "tag",
+    "registry": true,
+    "raw": "@toast-ui/vue-calendar",
+    "name": "@toast-ui/vue-calendar",
+    "escapedName": "@toast-ui%2fvue-calendar",
+    "scope": "@toast-ui",
+    "rawSpec": "",
+    "saveSpec": null,
+    "fetchSpec": "latest"
+  },
+  "_requiredBy": [
+    "#USER",
+    "/"
+  ],
+  "_resolved": "https://registry.npmjs.org/@toast-ui/vue-calendar/-/vue-calendar-2.0.5.tgz",
+  "_shasum": "ddaf0462c388bf64f3765afba4c5eda893590ca1",
+  "_spec": "@toast-ui/vue-calendar",
+  "_where": "/home/falco/domains/dev.falcotravel.com/falco/packages/Falco/Portal",
+  "author": {
+    "name": "NHN Cloud FE Development Lab",
+    "email": "dl_javascript@nhn.com"
+  },
+  "bugs": {
+    "url": "https://github.com/nhn/tui.calendar/issues"
+  },
+  "bundleDependencies": false,
+  "dependencies": {
+    "@toast-ui/calendar": "^2.0.5"
+  },
+  "deprecated": false,
+  "description": "TOAST UI Calendar for Vue",
+  "devDependencies": {
+    "@vue/cli": "^5.0.6",
+    "eslint-plugin-vue": "^9.1.1",
+    "vite-plugin-vue2": "^2.0.2",
+    "vue": "^2.6.14"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/toastui-vue-calendar.mjs",
+      "require": "./dist/toastui-vue-calendar.js"
+    },
+    "./ie11": "./dist/toastui-vue-calendar.ie11.js",
+    "./esm": "./dist/toastui-vue-calendar.mjs"
+  },
+  "files": [
+    "dist",
+    "index.d.ts"
+  ],
+  "homepage": "https://github.com/nhn/tui.calendar#readme",
+  "keywords": [
+    "nhn",
+    "toast",
+    "toastui",
+    "toast-ui",
+    "calendar",
+    "fullcalendar",
+    "daily",
+    "weekly",
+    "monthly",
+    "business week",
+    "milestone",
+    "task",
+    "allday"
+  ],
+  "license": "MIT",
+  "main": "./dist/toastui-vue-calendar.js",
+  "module": "./dist/toastui-vue-calendar.mjs",
+  "name": "@toast-ui/vue-calendar",
+  "peerDependencies": {
+    "vue": "^2.6.14"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nhn/tui.calendar.git",
+    "directory": "apps/vue-calendar"
+  },
+  "scripts": {
+    "build": "rimraf dist/ && concurrently 'npm:build:*'",
+    "build:esm": "vite build --mode esm",
+    "build:ie11": "vite build --mode ie11 && vite build --mode ie11_minify",
+    "build:modern": "vite build && vite build --mode minify",
+    "develop": "vite",
+    "lint": "eslint ."
+  },
+  "types": "./index.d.ts",
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./index.d.ts"
+      ]
+    }
+  },
+  "version": "2.0.5"
+}
