@@ -1,0 +1,19 @@
+{
+  "name": "toastui",
+  "version": "1.0.0",
+  "description": "Customizations on ToastUI Calendar",
+  "main": "./vue-calendar/dist/toastui-vue-calendar.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HansSchouten/toastui.git"
+  },
+  "author": "Hans Schouten",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/HansSchouten/toastui/issues"
+  },
+  "homepage": "https://github.com/HansSchouten/toastui#readme"
+}
