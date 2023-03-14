@@ -1,27 +1,27 @@
 {
-  "_from": "@toast-ui/calendar@^2.0.5",
-  "_id": "@toast-ui/calendar@2.0.5",
+  "_from": "@toast-ui/calendar@^2.1.3",
+  "_id": "@toast-ui/calendar@2.1.3",
   "_inBundle": false,
-  "_integrity": "sha512-SkelUKTNpsImpvJRvAt1q2Vj3xRzQLiU0VLnAwLA97pE/kWgt82vQin4UoaxQgHsZbUIbxcBU5fqWP0FGw0CZQ==",
+  "_integrity": "sha512-QxEf6MhcpqQ3dLSv6pxww1i6Ks/Ejp6mqy8GG7INvNYezmoXeo1IUBN4Cy9zLZeIgQHs02GEfusN5UzB+FyPhg==",
   "_location": "/@toast-ui/calendar",
   "_phantomChildren": {},
   "_requested": {
     "type": "range",
     "registry": true,
-    "raw": "@toast-ui/calendar@^2.0.5",
+    "raw": "@toast-ui/calendar@^2.1.3",
     "name": "@toast-ui/calendar",
     "escapedName": "@toast-ui%2fcalendar",
     "scope": "@toast-ui",
-    "rawSpec": "^2.0.5",
+    "rawSpec": "^2.1.3",
     "saveSpec": null,
-    "fetchSpec": "^2.0.5"
+    "fetchSpec": "^2.1.3"
   },
   "_requiredBy": [
     "/@toast-ui/vue-calendar"
   ],
-  "_resolved": "https://registry.npmjs.org/@toast-ui/calendar/-/calendar-2.0.5.tgz",
-  "_shasum": "bf59bd30142a33648adfc11f1ef54618a5546ec6",
-  "_spec": "@toast-ui/calendar@^2.0.5",
+  "_resolved": "https://registry.npmjs.org/@toast-ui/calendar/-/calendar-2.1.3.tgz",
+  "_shasum": "415f3a95368ff7d452a4d2e67caa7bc817dbefbc",
+  "_spec": "@toast-ui/calendar@^2.1.3",
   "_where": "/home/falco/domains/dev.falcotravel.com/falco/packages/Falco/Portal/node_modules/@toast-ui/vue-calendar",
   "author": {
     "name": "NHN Cloud FE Development Lab",
@@ -137,5 +137,5 @@
       ]
     }
   },
-  "version": "2.0.5"
+  "version": "2.1.3"
 }

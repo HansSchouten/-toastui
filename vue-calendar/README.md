@@ -1,6 +1,6 @@
 # TOAST UI Calendar for Vue 2
 
-> This is a Vue component wrapping [TOAST UI Calendar](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.0.5/apps/calendar/).
+> This is a Vue component wrapping [TOAST UI Calendar](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.1.3/apps/calendar/).
 
 [![vue2](https://img.shields.io/badge/vue-2.x-4fc08d.svg)](https://v2.vuejs.org/)
 [![npm version](https://img.shields.io/npm/v/@toast-ui/vue-calendar.svg)](https://www.npmjs.com/package/@toast-ui/vue-calendar)
@@ -27,14 +27,14 @@
 
 ## 📙 Documents
 
-- [English](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.0.5/apps/vue-calendar/docs/README.md)
-- [Korean](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.0.5/apps/vue-calendar/docs/ko/README.md)
+- [English](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.1.3/apps/vue-calendar/docs/README.md)
+- [Korean](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.1.3/apps/vue-calendar/docs/ko/README.md)
 
 ## Collect statistics on the use of open source
 
 TOAST UI Calendar for Vue applies Google Analytics (GA) to collect statistics on the use of open source, in order to identify how widely TOAST UI Calendar is used throughout the world. It also serves as important index to determine the future course of projects. `location.hostname` (e.g. > “ui.toast.com") is to be collected and the sole purpose is nothing but to measure statistics on the usage.
 
-To disable GA, set the [`usageStatistics` option](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.0.5/docs/en/apis/options.md#usagestatistics) to `false`:
+To disable GA, set the [`usageStatistics` option](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.1.3/docs/en/apis/options.md#usagestatistics) to `false`:
 
 ```html
 <template>
@@ -139,10 +139,10 @@ For more information on PR's step, please see links of Contributing section.
 
 ## 💬 Contributing
 
-- [Code of Conduct](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.0.5/CODE_OF_CONDUCT.md)
-- [Contributing Guidelines](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.0.5/CONTRIBUTING.md)
-- [Commit Message Convention](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.0.5/docs/COMMIT_MESSAGE_CONVENTION.md)
+- [Code of Conduct](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.1.3/CODE_OF_CONDUCT.md)
+- [Contributing Guidelines](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.1.3/CONTRIBUTING.md)
+- [Commit Message Convention](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.1.3/docs/COMMIT_MESSAGE_CONVENTION.md)
 
 ## 📜 License
 
-This software is licensed under the [MIT](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.0.5/LICENSE) © [NHN Cloud](https://github.com/nhn).
+This software is licensed under the [MIT](https://github.com/nhn/tui.calendar/blob/vue-calendar@2.1.3/LICENSE) © [NHN Cloud](https://github.com/nhn).

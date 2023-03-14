@@ -5070,7 +5070,7 @@
   }
   /*!
    * TOAST UI Calendar 2nd Edition
-   * @version 2.0.5 | Fri Jul 22 2022
+   * @version 2.1.3 | Tue Aug 16 2022
    * @author NHN Cloud FE Development Lab <dl_javascript@nhn.com>
    * @license MIT
    */
@@ -13135,6 +13135,8 @@
             dragBackgroundColor: "#a1b56c",
             borderColor: "#000"
           };
+          var TIME_EVENT_CONTAINER_MARGIN_LEFT = 2;
+          var COLLAPSED_DUPLICATE_EVENT_WIDTH_PX = 9;
           var isString = __webpack_require__(758);
           var isString_default = /* @__PURE__ */ __webpack_require__.n(isString);
           var CSS_PREFIX = "toastui-calendar-";
@@ -13166,6 +13168,16 @@
           }
           function toPx(value) {
             return "".concat(value, "px");
+          }
+          function extractPercentPx(value) {
+            var percentRegexp = /(\d+)%/;
+            var percentResult = value.match(percentRegexp);
+            var pxRegexp = /(-?)\s?(\d+)px/;
+            var pxResult = value.match(pxRegexp);
+            return {
+              percent: percentResult ? parseInt(percentResult[1], 10) : 0,
+              px: pxResult ? parseInt("".concat(pxResult[1]).concat(pxResult[2]), 10) : 0
+            };
           }
           function getEventColors(uiModel, calendarColor) {
             var eventColors = uiModel.model.getColors();
@@ -14080,7 +14092,7 @@
             }
             return obj;
           }
-          var eventUIPropsKey = ["top", "left", "width", "height", "hasCollide", "extraSpace", "hidden", "exceedLeft", "exceedRight", "croppedStart", "croppedEnd", "goingDurationHeight", "modelDurationHeight", "comingDurationHeight"];
+          var eventUIPropsKey = ["top", "left", "width", "height", "exceedLeft", "exceedRight", "croppedStart", "croppedEnd", "goingDurationHeight", "modelDurationHeight", "comingDurationHeight", "duplicateEvents", "duplicateEventIndex", "duplicateStarts", "duplicateEnds", "duplicateLeft", "duplicateWidth", "collapse", "isMain"];
           var EventUIModel = /* @__PURE__ */ function() {
             function EventUIModel2(event) {
               eventUIModel_classCallCheck(this, EventUIModel2);
@@ -14088,9 +14100,6 @@
               eventUIModel_defineProperty(this, "left", 0);
               eventUIModel_defineProperty(this, "width", 0);
               eventUIModel_defineProperty(this, "height", 0);
-              eventUIModel_defineProperty(this, "hasCollide", false);
-              eventUIModel_defineProperty(this, "extraSpace", 0);
-              eventUIModel_defineProperty(this, "hidden", false);
               eventUIModel_defineProperty(this, "exceedLeft", false);
               eventUIModel_defineProperty(this, "exceedRight", false);
               eventUIModel_defineProperty(this, "croppedStart", false);
@@ -14098,6 +14107,12 @@
               eventUIModel_defineProperty(this, "goingDurationHeight", 0);
               eventUIModel_defineProperty(this, "modelDurationHeight", 100);
               eventUIModel_defineProperty(this, "comingDurationHeight", 0);
+              eventUIModel_defineProperty(this, "duplicateEvents", []);
+              eventUIModel_defineProperty(this, "duplicateEventIndex", -1);
+              eventUIModel_defineProperty(this, "duplicateLeft", "");
+              eventUIModel_defineProperty(this, "duplicateWidth", "");
+              eventUIModel_defineProperty(this, "collapse", false);
+              eventUIModel_defineProperty(this, "isMain", false);
               this.model = event;
             }
             eventUIModel_createClass(EventUIModel2, [{
@@ -14145,15 +14160,35 @@
               key: "collidesWith",
               value: function collidesWith(uiModel) {
                 var usingTravelTime = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : true;
+                var infos = [];
+                [this, uiModel].forEach(function(event) {
+                  var isDuplicateEvent = event instanceof EventUIModel2 && event.duplicateEvents.length > 0;
+                  if (isDuplicateEvent) {
+                    infos.push({
+                      start: event.duplicateStarts,
+                      end: event.duplicateEnds,
+                      goingDuration: 0,
+                      comingDuration: 0
+                    });
+                  } else {
+                    infos.push({
+                      start: event.getStarts(),
+                      end: event.getEnds(),
+                      goingDuration: event.valueOf().goingDuration,
+                      comingDuration: event.valueOf().comingDuration
+                    });
+                  }
+                });
+                var thisInfo = infos[0], targetInfo = infos[1];
                 return events_collidesWith({
-                  start: this.getStarts().getTime(),
-                  end: this.getEnds().getTime(),
-                  targetStart: uiModel.getStarts().getTime(),
-                  targetEnd: uiModel.getEnds().getTime(),
-                  goingDuration: this.model.goingDuration,
-                  comingDuration: this.model.comingDuration,
-                  targetGoingDuration: uiModel.valueOf().goingDuration,
-                  targetComingDuration: uiModel.valueOf().comingDuration,
+                  start: thisInfo.start.getTime(),
+                  end: thisInfo.end.getTime(),
+                  targetStart: targetInfo.start.getTime(),
+                  targetEnd: targetInfo.end.getTime(),
+                  goingDuration: thisInfo.goingDuration,
+                  comingDuration: thisInfo.comingDuration,
+                  targetGoingDuration: targetInfo.goingDuration,
+                  targetComingDuration: targetInfo.comingDuration,
                   usingTravelTime
                 });
               }
@@ -14414,7 +14449,7 @@
               return hour < 12 ? "am" : "pm";
             }
           };
-          var datetime_MS_PER_DAY = 864e5;
+          var MS_PER_DAY = 864e5;
           var MS_PER_MINUTES = 6e4;
           var MS_EVENT_MIN_DURATION = 20 * MS_PER_MINUTES;
           var MS_PER_THIRTY_MINUTES = 30 * 60 * 1e3;
@@ -14458,7 +14493,7 @@
             d2.setHours(0, 0, 0, 0);
             return d2;
           }
-          function datetime_makeDateRange(startDate, endDate, step) {
+          function makeDateRange(startDate, endDate, step) {
             var startTime = startDate.getTime();
             var endTime = endDate.getTime();
             var date2 = new date_TZDate(startDate);
@@ -14553,7 +14588,7 @@
             var uniformWidth = 100 / days;
             var wideWidth = days > limitDaysToApplyNarrowWeekend ? 100 / (days - 1) : uniformWidth;
             var accumulatedWidth = 0;
-            var dates = range_default()(startDayOfWeek, 7).concat(range_default()(days)).slice(0, 7);
+            var dates = range_default()(startDayOfWeek, WEEK_DAYS).concat(range_default()(days)).slice(0, WEEK_DAYS);
             narrowWeekend = workweek ? false : narrowWeekend;
             var rowStyleInfo = dates.map(function(day) {
               var width = narrowWeekend ? wideWidth : uniformWidth;
@@ -14628,7 +14663,7 @@
           function getDateDifference(d1, d2) {
             var _d1 = new date_TZDate(d1.getFullYear(), d1.getMonth(), d1.getDate()).getTime();
             var _d2 = new date_TZDate(d2.getFullYear(), d2.getMonth(), d2.getDate()).getTime();
-            return Math.round((_d1 - _d2) / datetime_MS_PER_DAY);
+            return Math.round((_d1 - _d2) / MS_PER_DAY);
           }
           function hasCollision(start, end, targetStart, targetEnd) {
             return targetStart > start && targetStart < end || targetEnd > start && targetEnd < end || targetStart <= start && targetEnd >= end;
@@ -14799,7 +14834,7 @@
                 if (!end) {
                   this.end.setMinutes(this.end.getMinutes() + 30);
                 }
-                this.hasMultiDates = this.end.getTime() - this.start.getTime() > datetime_MS_PER_DAY;
+                this.hasMultiDates = this.end.getTime() - this.start.getTime() > MS_PER_DAY;
               }
             }, {
               key: "getStarts",
@@ -14892,6 +14927,7 @@
                 return {
                   id: this.id,
                   calendarId: this.calendarId,
+                  __cid: this.cid(),
                   title: this.title,
                   body: this.body,
                   isAllday: this.isAllday,
@@ -15260,10 +15296,10 @@
             return collection;
           }
           function getDateRange(start, end) {
-            return datetime_makeDateRange(toStartOfDay(start), toEndOfDay(end), datetime_MS_PER_DAY);
+            return makeDateRange(toStartOfDay(start), toEndOfDay(end), MS_PER_DAY);
           }
           function isAllday(event) {
-            return event.isAllday || event.category === "time" && Number(event.end) - Number(event.start) > datetime_MS_PER_DAY;
+            return event.isAllday || event.category === "time" && Number(event.end) - Number(event.start) > MS_PER_DAY;
           }
           function filterByCategory(uiModel) {
             var model = uiModel.model;
@@ -15618,6 +15654,7 @@
             };
           }
           var DEFAULT_RESIZER_LENGTH = 3;
+          var DEFAULT_DUPLICATE_EVENT_CID = -1;
           function getRestPanelHeight(dayGridRowsState, lastPanelType, initHeight) {
             return Object.keys(dayGridRowsState).reduce(function(acc, rowName) {
               if (rowName === lastPanelType) {
@@ -15631,7 +15668,8 @@
               layout: 500,
               weekViewLayout: {
                 lastPanelType: null,
-                dayGridRows: {}
+                dayGridRows: {},
+                selectedDuplicateEventCid: DEFAULT_DUPLICATE_EVENT_CID
               }
             };
           }
@@ -15678,6 +15716,11 @@
                   if (lastPanelType) {
                     state.weekViewLayout.dayGridRows[lastPanelType].height = getRestPanelHeight(state.weekViewLayout.dayGridRows, lastPanelType, state.layout);
                   }
+                }));
+              },
+              setSelectedDuplicateEventCid: function setSelectedDuplicateEventCid(cid) {
+                return set((0, immer_esm.ZP)(function(state) {
+                  state.weekViewLayout.selectedDuplicateEventCid = cid !== null && cid !== void 0 ? cid : DEFAULT_DUPLICATE_EVENT_CID;
                 }));
               }
             };
@@ -15732,9 +15775,30 @@
             }
             return obj;
           }
+          function initializeCollapseDuplicateEvents(options) {
+            if (!options) {
+              return false;
+            }
+            var initialCollapseDuplicateEvents = {
+              getDuplicateEvents: function getDuplicateEvents(targetEvent, events) {
+                return events.filter(function(event) {
+                  return event.title === targetEvent.title && compare(event.start, targetEvent.start) === 0 && compare(event.end, targetEvent.end) === 0;
+                }).sort(function(a2, b2) {
+                  return a2.calendarId > b2.calendarId ? 1 : -1;
+                });
+              },
+              getMainEvent: function getMainEvent(events) {
+                return last(events);
+              }
+            };
+            if (isBoolean_default()(options)) {
+              return initialCollapseDuplicateEvents;
+            }
+            return options_objectSpread(options_objectSpread({}, initialCollapseDuplicateEvents), options);
+          }
           function initializeWeekOptions() {
             var weekOptions = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
-            return options_objectSpread({
+            var week = options_objectSpread({
               startDayOfWeek: Day.SUN,
               dayNames: [],
               narrowWeekend: false,
@@ -15745,8 +15809,11 @@
               hourStart: 0,
               hourEnd: 24,
               eventView: true,
-              taskView: true
+              taskView: true,
+              collapseDuplicateEvents: false
             }, weekOptions);
+            week.collapseDuplicateEvents = initializeCollapseDuplicateEvents(week.collapseDuplicateEvents);
+            return week;
           }
           function initializeTimezoneOptions() {
             var timezoneOptions = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
@@ -15808,6 +15875,13 @@
               setOptions: function setOptions() {
                 var newOptions = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
                 return set((0, immer_esm.ZP)(function(state) {
+                  var _newOptions$week;
+                  if (newOptions.gridSelection) {
+                    newOptions.gridSelection = initializeGridSelectionOptions(newOptions.gridSelection);
+                  }
+                  if ((_newOptions$week = newOptions.week) !== null && _newOptions$week !== void 0 && _newOptions$week.collapseDuplicateEvents) {
+                    newOptions.week.collapseDuplicateEvents = initializeCollapseDuplicateEvents(newOptions.week.collapseDuplicateEvents);
+                  }
                   mergeObject(state.options, newOptions);
                 }));
               }
@@ -17113,7 +17187,7 @@
             };
           }
           function positionUIModels(start, end, matrices, iteratee) {
-            var ymdListToRender = datetime_makeDateRange(start, end, datetime_MS_PER_DAY).map(function(date2) {
+            var ymdListToRender = makeDateRange(start, end, MS_PER_DAY).map(function(date2) {
               return datetime_toFormat(date2, "YYYYMMDD");
             });
             matrices.forEach(function(matrix) {
@@ -17123,7 +17197,7 @@
                     return;
                   }
                   var ymd = datetime_toFormat(uiModel.getStarts(), "YYYYMMDD");
-                  var dateLength = datetime_makeDateRange(toStartOfDay(uiModel.getStarts()), toEndOfDay(uiModel.getEnds()), datetime_MS_PER_DAY).length;
+                  var dateLength = makeDateRange(toStartOfDay(uiModel.getStarts()), toEndOfDay(uiModel.getEnds()), MS_PER_DAY).length;
                   uiModel.top = index;
                   uiModel.left = ymdListToRender.indexOf(ymd);
                   uiModel.width = dateLength;
@@ -17328,11 +17402,46 @@
             }
             return obj;
           }
+          function week_toConsumableArray(arr) {
+            return week_arrayWithoutHoles(arr) || week_iterableToArray(arr) || week_unsupportedIterableToArray(arr) || week_nonIterableSpread();
+          }
+          function week_nonIterableSpread() {
+            throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+          }
+          function week_iterableToArray(iter) {
+            if (typeof Symbol !== "undefined" && iter[Symbol.iterator] != null || iter["@@iterator"] != null)
+              return Array.from(iter);
+          }
+          function week_arrayWithoutHoles(arr) {
+            if (Array.isArray(arr))
+              return week_arrayLikeToArray(arr);
+          }
           function week_slicedToArray(arr, i) {
             return week_arrayWithHoles(arr) || week_iterableToArrayLimit(arr, i) || week_unsupportedIterableToArray(arr, i) || week_nonIterableRest();
           }
           function week_nonIterableRest() {
             throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+          }
+          function week_unsupportedIterableToArray(o2, minLen) {
+            if (!o2)
+              return;
+            if (typeof o2 === "string")
+              return week_arrayLikeToArray(o2, minLen);
+            var n2 = Object.prototype.toString.call(o2).slice(8, -1);
+            if (n2 === "Object" && o2.constructor)
+              n2 = o2.constructor.name;
+            if (n2 === "Map" || n2 === "Set")
+              return Array.from(o2);
+            if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
+              return week_arrayLikeToArray(o2, minLen);
+          }
+          function week_arrayLikeToArray(arr, len) {
+            if (len == null || len > arr.length)
+              len = arr.length;
+            for (var i = 0, arr2 = new Array(len); i < len; i++) {
+              arr2[i] = arr[i];
+            }
+            return arr2;
           }
           function week_iterableToArrayLimit(arr, i) {
             var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
@@ -17365,122 +17474,6 @@
           function week_arrayWithHoles(arr) {
             if (Array.isArray(arr))
               return arr;
-          }
-          function week_toConsumableArray(arr) {
-            return week_arrayWithoutHoles(arr) || week_iterableToArray(arr) || week_unsupportedIterableToArray(arr) || week_nonIterableSpread();
-          }
-          function week_nonIterableSpread() {
-            throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
-          }
-          function week_unsupportedIterableToArray(o2, minLen) {
-            if (!o2)
-              return;
-            if (typeof o2 === "string")
-              return week_arrayLikeToArray(o2, minLen);
-            var n2 = Object.prototype.toString.call(o2).slice(8, -1);
-            if (n2 === "Object" && o2.constructor)
-              n2 = o2.constructor.name;
-            if (n2 === "Map" || n2 === "Set")
-              return Array.from(o2);
-            if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
-              return week_arrayLikeToArray(o2, minLen);
-          }
-          function week_iterableToArray(iter) {
-            if (typeof Symbol !== "undefined" && iter[Symbol.iterator] != null || iter["@@iterator"] != null)
-              return Array.from(iter);
-          }
-          function week_arrayWithoutHoles(arr) {
-            if (Array.isArray(arr))
-              return week_arrayLikeToArray(arr);
-          }
-          function week_arrayLikeToArray(arr, len) {
-            if (len == null || len > arr.length)
-              len = arr.length;
-            for (var i = 0, arr2 = new Array(len); i < len; i++) {
-              arr2[i] = arr[i];
-            }
-            return arr2;
-          }
-          function generateTimeArrayInRow(matrix) {
-            var map = [];
-            var maxColLen = Math.max.apply(Math, week_toConsumableArray(matrix.map(function(col2) {
-              return col2.length;
-            })));
-            var cursor = [];
-            var row;
-            var col;
-            var event;
-            var start;
-            var end;
-            for (col = 1; col < maxColLen; col += 1) {
-              var _matrix$row;
-              row = 0;
-              event = matrix === null || matrix === void 0 ? void 0 : (_matrix$row = matrix[row]) === null || _matrix$row === void 0 ? void 0 : _matrix$row[col];
-              while (event) {
-                var _matrix$row2;
-                var _event$valueOf = event.valueOf(), goingDuration = _event$valueOf.goingDuration, comingDuration = _event$valueOf.comingDuration;
-                start = event.getStarts().getTime() - millisecondsFrom("minute", goingDuration);
-                end = event.getEnds().getTime() + millisecondsFrom("minute", comingDuration);
-                if (Math.abs(end - start) < MS_EVENT_MIN_DURATION) {
-                  end += MS_EVENT_MIN_DURATION;
-                }
-                cursor.push([start, end]);
-                row += 1;
-                event = matrix === null || matrix === void 0 ? void 0 : (_matrix$row2 = matrix[row]) === null || _matrix$row2 === void 0 ? void 0 : _matrix$row2[col];
-              }
-              map.push(cursor);
-              cursor = [];
-            }
-            return map;
-          }
-          function searchFunc(index) {
-            return function(block) {
-              return block[index];
-            };
-          }
-          function week_hasCollision(arr, start, end) {
-            if (!(arr !== null && arr !== void 0 && arr.length)) {
-              return false;
-            }
-            var compare2 = array.compare.num.asc;
-            var startStart = Math.abs(array.bsearch(arr, start, searchFunc(0), compare2));
-            var startEnd = Math.abs(array.bsearch(arr, start, searchFunc(1), compare2));
-            var endStart = Math.abs(array.bsearch(arr, end, searchFunc(0), compare2));
-            var endEnd = Math.abs(array.bsearch(arr, end, searchFunc(1), compare2));
-            return !(startStart === startEnd && startEnd === endStart && endStart === endEnd);
-          }
-          function getCollides(matrices) {
-            matrices.forEach(function(matrix) {
-              var binaryMap = generateTimeArrayInRow(matrix);
-              var maxRowLength = Math.max.apply(Math, week_toConsumableArray(matrix.map(function(row) {
-                return row.length;
-              })));
-              matrix.forEach(function(row) {
-                row.forEach(function(uiModel, col) {
-                  if (!uiModel) {
-                    return;
-                  }
-                  var _uiModel$model = uiModel.model, goingDuration = _uiModel$model.goingDuration, comingDuration = _uiModel$model.comingDuration;
-                  var startTime = uiModel.getStarts().getTime();
-                  var endTime = uiModel.getEnds().getTime();
-                  if (Math.abs(endTime - startTime) < MS_EVENT_MIN_DURATION) {
-                    endTime += MS_EVENT_MIN_DURATION;
-                  }
-                  startTime -= millisecondsFrom("minute", goingDuration);
-                  endTime += millisecondsFrom("minute", comingDuration);
-                  endTime -= 1;
-                  for (var i = col + 1; i < maxRowLength; i += 1) {
-                    var collided = week_hasCollision(binaryMap[i - 1], startTime, endTime);
-                    if (collided) {
-                      uiModel.hasCollide = true;
-                      break;
-                    }
-                    uiModel.extraSpace += 1;
-                  }
-                });
-              });
-            });
-            return matrices;
           }
           function _makeHourRangeFilter(hStart, hEnd) {
             return function(uiModel) {
@@ -17536,7 +17529,7 @@
               var uiModels = _getUIModel(uiModelColl);
               var collisionGroups = getCollisionGroup(uiModels, usingTravelTime);
               var matrices = getMatrices(uiModelColl, collisionGroups, usingTravelTime);
-              result[ymd] = getCollides(matrices);
+              result[ymd] = matrices;
             });
             return result;
           }
@@ -18099,7 +18092,7 @@
               endRowIndex: isReversed ? initPos.rowIndex : currentPos.rowIndex
             };
           }
-          function calculateTimeGridSelectionByCurrentIndex(timeGridSelection, columnIndex) {
+          function calculateTimeGridSelectionByCurrentIndex(timeGridSelection, columnIndex, maxRowIndex) {
             if (type_isNil(timeGridSelection)) {
               return null;
             }
@@ -18117,10 +18110,10 @@
             };
             if (startColumnIndex < columnIndex && columnIndex < endColumnIndex) {
               resultGridSelection.startRowIndex = 0;
-              resultGridSelection.endRowIndex = 47;
+              resultGridSelection.endRowIndex = maxRowIndex;
             } else if (startColumnIndex !== endColumnIndex) {
               if (startColumnIndex === columnIndex) {
-                resultGridSelection.endRowIndex = 47;
+                resultGridSelection.endRowIndex = maxRowIndex;
               } else if (endColumnIndex === columnIndex) {
                 resultGridSelection.startRowIndex = 0;
               }
@@ -20449,6 +20442,7 @@
             };
           }
           function EventDetailPopup() {
+            var _useStore = useStore(optionsSelector), useFormPopup = _useStore.useFormPopup;
             var popupParams = useStore(eventDetailPopupParamSelector);
             var _ref = popupParams !== null && popupParams !== void 0 ? popupParams : {}, event = _ref.event, eventRect = _ref.eventRect;
             var _useDispatch = useDispatch("popup"), showFormPopup = _useDispatch.showFormPopup, hideDetailPopup = _useDispatch.hideDetailPopup;
@@ -20491,18 +20485,25 @@
               left: eventRect.left + eventRect.width / 2
             };
             var onClickEditButton = function onClickEditButton2() {
-              return showFormPopup({
-                isCreationPopup: false,
-                event,
-                title,
-                location: location2,
-                start,
-                end,
-                isAllday: isAllday2,
-                isPrivate,
-                eventState: state,
-                popupArrowPointPosition
-              });
+              if (useFormPopup) {
+                showFormPopup({
+                  isCreationPopup: false,
+                  event,
+                  title,
+                  location: location2,
+                  start,
+                  end,
+                  isAllday: isAllday2,
+                  isPrivate,
+                  eventState: state,
+                  popupArrowPointPosition
+                });
+              } else {
+                eventBus.fire("beforeUpdateEvent", {
+                  event: event.toEventObject(),
+                  changes: {}
+                });
+              }
             };
             var onClickDeleteButton = function onClickDeleteButton2() {
               eventBus.fire("beforeDeleteEvent", event.toEventObject());
@@ -20748,16 +20749,37 @@
           }
           var FormStateActionType;
           (function(FormStateActionType2) {
+            FormStateActionType2["init"] = "init";
             FormStateActionType2["setCalendarId"] = "setCalendarId";
+            FormStateActionType2["setTitle"] = "setTitle";
+            FormStateActionType2["setLocation"] = "setLocation";
             FormStateActionType2["setPrivate"] = "setPrivate";
             FormStateActionType2["setAllday"] = "setAllday";
             FormStateActionType2["setState"] = "setState";
+            FormStateActionType2["reset"] = "reset";
           })(FormStateActionType || (FormStateActionType = {}));
+          var defaultFormState = {
+            title: "",
+            location: "",
+            isAllday: false,
+            isPrivate: false,
+            state: "Busy"
+          };
           function formStateReducer(state, action) {
             switch (action.type) {
+              case FormStateActionType.init:
+                return useFormState_objectSpread(useFormState_objectSpread({}, defaultFormState), action.event);
               case FormStateActionType.setCalendarId:
                 return useFormState_objectSpread(useFormState_objectSpread({}, state), {}, {
                   calendarId: action.calendarId
+                });
+              case FormStateActionType.setTitle:
+                return useFormState_objectSpread(useFormState_objectSpread({}, state), {}, {
+                  title: action.title
+                });
+              case FormStateActionType.setLocation:
+                return useFormState_objectSpread(useFormState_objectSpread({}, state), {}, {
+                  location: action.location
                 });
               case FormStateActionType.setPrivate:
                 return useFormState_objectSpread(useFormState_objectSpread({}, state), {}, {
@@ -20771,12 +20793,16 @@
                 return useFormState_objectSpread(useFormState_objectSpread({}, state), {}, {
                   state: action.state
                 });
+              case FormStateActionType.reset:
+                return useFormState_objectSpread(useFormState_objectSpread({}, state), defaultFormState);
               default:
                 return state;
             }
           }
-          function useFormState(initialState) {
-            return hooks_module_d(formStateReducer, initialState);
+          function useFormState(initCalendarId) {
+            return hooks_module_d(formStateReducer, useFormState_objectSpread({
+              calendarId: initCalendarId
+            }, defaultFormState));
           }
           var calendarSelector_classNames = {
             popupSection: ["dropdown-section", "calendar-section"],
@@ -21048,11 +21074,17 @@
             content: cls("content")
           };
           function LocationInputBox(_ref) {
-            var location2 = _ref.location;
+            var location2 = _ref.location, formStateDispatch = _ref.formStateDispatch;
             var locationPlaceholder = useStringOnlyTemplate({
               template: "locationPlaceholder",
               defaultValue: "Location"
             });
+            var handleLocationChange = function handleLocationChange2(e2) {
+              formStateDispatch({
+                type: FormStateActionType.setLocation,
+                location: e2.currentTarget.value
+              });
+            };
             return h(PopupSection, null, h("div", {
               className: locationInputBox_classNames.popupSectionItem
             }, h("span", {
@@ -21061,7 +21093,8 @@
               name: "location",
               className: locationInputBox_classNames.content,
               placeholder: locationPlaceholder,
-              value: location2
+              value: location2,
+              onChange: handleLocationChange
             })));
           }
           var titleInputBox_classNames = {
@@ -21082,6 +21115,12 @@
                 isPrivate: !isPrivate
               });
             };
+            var handleInputChange = function handleInputChange2(e2) {
+              formStateDispatch({
+                type: FormStateActionType.setTitle,
+                title: e2.currentTarget.value
+              });
+            };
             return h(PopupSection, null, h("div", {
               className: titleInputBox_classNames.popupSectionItem
             }, h("span", {
@@ -21091,6 +21130,7 @@
               className: titleInputBox_classNames.content,
               placeholder: titlePlaceholder,
               value: title,
+              onChange: handleInputChange,
               required: true
             })), h("button", {
               type: "button",
@@ -21241,23 +21281,14 @@
             }, {});
           }
           function EventFormPopup() {
-            var _event$calendarId, _calendars$;
+            var _calendars$;
             var _useStore = useStore(calendarSelector), calendars = _useStore.calendars;
             var _useDispatch = useDispatch("popup"), hideAllPopup = _useDispatch.hideAllPopup;
             var popupParams = useStore(eventFormPopupParamSelector);
-            var _ref3 = popupParams !== null && popupParams !== void 0 ? popupParams : {}, title = _ref3.title, location2 = _ref3.location, start = _ref3.start, end = _ref3.end, _ref3$isAllday = _ref3.isAllday, isAllday2 = _ref3$isAllday === void 0 ? false : _ref3$isAllday, _ref3$isPrivate = _ref3.isPrivate, isPrivate = _ref3$isPrivate === void 0 ? false : _ref3$isPrivate, _ref3$eventState = _ref3.eventState, eventState = _ref3$eventState === void 0 ? "Busy" : _ref3$eventState, popupArrowPointPosition = _ref3.popupArrowPointPosition, close = _ref3.close, isCreationPopup = _ref3.isCreationPopup, event = _ref3.event;
+            var _ref3 = popupParams !== null && popupParams !== void 0 ? popupParams : {}, start = _ref3.start, end = _ref3.end, popupArrowPointPosition = _ref3.popupArrowPointPosition, close = _ref3.close, isCreationPopup = _ref3.isCreationPopup, event = _ref3.event;
             var eventBus = useEventBus();
             var formPopupSlot = useFloatingLayer("formPopupSlot");
-            var _useFormState = useFormState({
-              title,
-              location: location2,
-              start,
-              end,
-              isAllday: isAllday2,
-              isPrivate,
-              calendarId: (_event$calendarId = event === null || event === void 0 ? void 0 : event.calendarId) !== null && _event$calendarId !== void 0 ? _event$calendarId : (_calendars$ = calendars[0]) === null || _calendars$ === void 0 ? void 0 : _calendars$.id,
-              state: eventState
-            }), _useFormState2 = eventFormPopup_slicedToArray(_useFormState, 2), formState = _useFormState2[0], formStateDispatch = _useFormState2[1];
+            var _useFormState = useFormState((_calendars$ = calendars[0]) === null || _calendars$ === void 0 ? void 0 : _calendars$.id), _useFormState2 = eventFormPopup_slicedToArray(_useFormState, 2), formState = _useFormState2[0], formStateDispatch = _useFormState2[1];
             var datePickerRef = hooks_module_s(null);
             var popupContainerRef = hooks_module_s(null);
             var _useState = hooks_module_y({}), _useState2 = eventFormPopup_slicedToArray(_useState, 2), style = _useState2[0], setStyle = _useState2[1];
@@ -21286,6 +21317,28 @@
                 setArrowDirection(direction);
               }
             }, [layoutContainer, popupArrowPointPosition]);
+            hooks_module_(function() {
+              if (isPresent(popupParams) && isPresent(event)) {
+                formStateDispatch({
+                  type: FormStateActionType.init,
+                  event: {
+                    title: popupParams.title,
+                    location: popupParams.location,
+                    isAllday: popupParams.isAllday,
+                    isPrivate: popupParams.isPrivate,
+                    calendarId: event.calendarId,
+                    state: popupParams.eventState
+                  }
+                });
+              }
+            }, [calendars, event, formStateDispatch, popupParams]);
+            hooks_module_(function() {
+              if (type_isNil(popupParams)) {
+                formStateDispatch({
+                  type: FormStateActionType.reset
+                });
+              }
+            }, [formStateDispatch, popupParams]);
             if (type_isNil(start) || type_isNil(end) || type_isNil(formPopupSlot)) {
               return null;
             }
@@ -21324,11 +21377,12 @@
               calendars,
               formStateDispatch
             }) : h(PopupSection, null), h(TitleInputBox, {
-              title,
+              title: formState.title,
               isPrivate: formState.isPrivate,
               formStateDispatch
             }), h(LocationInputBox, {
-              location: location2
+              location: formState.location,
+              formStateDispatch
             }), h(DateSelector, {
               start,
               end,
@@ -21947,20 +22001,32 @@
             moveEvent: cls("dragging--move-event"),
             resizeEvent: cls("dragging--resize-vertical-event")
           };
+          function getMarginLeft(left) {
+            var _extractPercentPx = extractPercentPx("".concat(left)), percent = _extractPercentPx.percent, px = _extractPercentPx.px;
+            return left > 0 || percent > 0 || px > 0 ? TIME_EVENT_CONTAINER_MARGIN_LEFT : 0;
+          }
+          function getContainerWidth(width, marginLeft) {
+            if (isString_default()(width)) {
+              return width;
+            }
+            if (width >= 0) {
+              return "calc(".concat(toPercent(width), " - ").concat(marginLeft, "px)");
+            }
+            return "";
+          }
           function getStyles(_ref) {
             var uiModel = _ref.uiModel, isDraggingTarget = _ref.isDraggingTarget, hasNextStartTime = _ref.hasNextStartTime, calendarColor = _ref.calendarColor, minHeight = _ref.minHeight;
-            var top = uiModel.top, left = uiModel.left, height = uiModel.height, width = uiModel.width, goingDurationHeight = uiModel.goingDurationHeight, modelDurationHeight = uiModel.modelDurationHeight, comingDurationHeight = uiModel.comingDurationHeight, croppedStart = uiModel.croppedStart, croppedEnd = uiModel.croppedEnd;
+            var top = uiModel.top, left = uiModel.left, height = uiModel.height, width = uiModel.width, duplicateLeft = uiModel.duplicateLeft, duplicateWidth = uiModel.duplicateWidth, goingDurationHeight = uiModel.goingDurationHeight, modelDurationHeight = uiModel.modelDurationHeight, comingDurationHeight = uiModel.comingDurationHeight, croppedStart = uiModel.croppedStart, croppedEnd = uiModel.croppedEnd;
             var travelBorderColor = "white";
             var borderRadius = 2;
-            var paddingLeft = 2;
             var defaultMarginBottom = 2;
-            var marginLeft = left > 0 ? paddingLeft : 0;
+            var marginLeft = getMarginLeft(left);
             var _getEventColors = getEventColors(uiModel, calendarColor), color = _getEventColors.color, backgroundColor = _getEventColors.backgroundColor, borderColor = _getEventColors.borderColor, dragBackgroundColor = _getEventColors.dragBackgroundColor;
             var containerStyle = {
-              width: width >= 0 ? "calc(".concat(toPercent(width), " - ").concat(marginLeft, "px)") : "",
+              width: getContainerWidth(duplicateWidth || width, marginLeft),
               height: "calc(".concat(toPercent(Math.max(height, minHeight)), " - ").concat(defaultMarginBottom, "px)"),
               top: toPercent(top),
-              left: toPercent(left),
+              left: duplicateLeft || toPercent(left),
               borderRadius,
               borderLeft: "3px solid ".concat(borderColor),
               marginLeft,
@@ -22002,11 +22068,13 @@
           }
           function TimeEvent(_ref3) {
             var uiModel = _ref3.uiModel, nextStartTime = _ref3.nextStartTime, _ref3$isResizingGuide = _ref3.isResizingGuide, isResizingGuide = _ref3$isResizingGuide === void 0 ? false : _ref3$isResizingGuide, _ref3$minHeight = _ref3.minHeight, minHeight = _ref3$minHeight === void 0 ? 0 : _ref3$minHeight;
-            var _useStore = useStore(optionsSelector), useDetailPopup = _useStore.useDetailPopup, isReadOnlyCalendar = _useStore.isReadOnly;
+            var _useStore = useStore(optionsSelector), useDetailPopup = _useStore.useDetailPopup, isReadOnlyCalendar = _useStore.isReadOnly, weekOptions = _useStore.week;
             var calendarColor = useCalendarColor(uiModel.model);
+            var collapseDuplicateEvents = weekOptions.collapseDuplicateEvents;
             var layoutContainer = useLayoutContainer();
             var _useDispatch = useDispatch("popup"), showDetailPopup = _useDispatch.showDetailPopup;
             var _useDispatch2 = useDispatch("dnd"), setDraggingEventUIModel = _useDispatch2.setDraggingEventUIModel;
+            var _useDispatch3 = useDispatch("weekViewLayout"), setSelectedDuplicateEventCid = _useDispatch3.setSelectedDuplicateEventCid;
             var eventBus = useEventBus();
             var eventContainerRef = hooks_module_s(null);
             var _useState = hooks_module_y(false), _useState2 = timeEvent_slicedToArray(_useState, 2), isDraggingTarget = _useState2[0], setIsDraggingTarget = _useState2[1];
@@ -22052,6 +22120,10 @@
                 var draggingState = _ref5.draggingState;
                 endDragEvent(timeEvent_classNames.moveEvent);
                 var isClick = draggingState <= DraggingState.INIT;
+                if (isClick && collapseDuplicateEvents) {
+                  var selectedDuplicateEventCid = uiModel.duplicateEvents.length > 0 ? uiModel.cid() : DEFAULT_DUPLICATE_EVENT_CID;
+                  setSelectedDuplicateEventCid(selectedDuplicateEventCid);
+                }
                 if (isClick && useDetailPopup && eventContainerRef.current) {
                   showDetailPopup({
                     event: uiModel.model,
@@ -22156,8 +22228,8 @@
           function GridSelectionByColumn(_ref2) {
             var columnIndex = _ref2.columnIndex, timeGridRows = _ref2.timeGridRows;
             var gridSelectionData = useStore(hooks_module_T(function(state) {
-              return timeGridSelectionHelper.calculateSelection(state.gridSelection.timeGrid, columnIndex);
-            }, [columnIndex]));
+              return timeGridSelectionHelper.calculateSelection(state.gridSelection.timeGrid, columnIndex, timeGridRows.length - 1);
+            }, [columnIndex, timeGridRows]));
             var gridSelectionProps = F(function() {
               if (!gridSelectionData) {
                 return null;
@@ -22614,8 +22686,8 @@
               return arr;
           }
           var THIRTY_MINUTES = 30;
-          function getCurrentIndexByTime(time) {
-            var hour = time.getHours();
+          function getCurrentIndexByTime(time, hourStart) {
+            var hour = time.getHours() - hourStart;
             var minutes = time.getMinutes();
             return hour * 2 + Math.floor(minutes / THIRTY_MINUTES);
           }
@@ -22623,16 +22695,17 @@
             var draggingEvent = _ref.draggingEvent, columnDiff = _ref.columnDiff, rowDiff = _ref.rowDiff, timeGridDataRows = _ref.timeGridDataRows, currentDate = _ref.currentDate;
             var rowHeight = timeGridDataRows[0].height;
             var maxHeight = rowHeight * timeGridDataRows.length;
-            var millisecondsDiff = rowDiff * MS_PER_THIRTY_MINUTES + columnDiff * datetime_MS_PER_DAY;
+            var millisecondsDiff = rowDiff * MS_PER_THIRTY_MINUTES + columnDiff * MS_PER_DAY;
+            var hourStart = Number(timeGridDataRows[0].startTime.split(":")[0]);
             var _draggingEvent$model = draggingEvent.model, _draggingEvent$model$ = _draggingEvent$model.goingDuration, goingDuration = _draggingEvent$model$ === void 0 ? 0 : _draggingEvent$model$, _draggingEvent$model$2 = _draggingEvent$model.comingDuration, comingDuration = _draggingEvent$model$2 === void 0 ? 0 : _draggingEvent$model$2;
             var goingStart = addMinutes(draggingEvent.getStarts(), -goingDuration);
             var comingEnd = addMinutes(draggingEvent.getEnds(), comingDuration);
             var nextStart = addMilliseconds(goingStart, millisecondsDiff);
             var nextEnd = addMilliseconds(comingEnd, millisecondsDiff);
-            var startIndex = getCurrentIndexByTime(nextStart);
-            var endIndex = getCurrentIndexByTime(nextEnd);
-            var isStartAtPrevDate = nextStart.getDate() < currentDate.getDate();
-            var isEndAtNextDate = nextEnd.getDate() > currentDate.getDate();
+            var startIndex = Math.max(getCurrentIndexByTime(nextStart, hourStart), 0);
+            var endIndex = Math.min(getCurrentIndexByTime(nextEnd, hourStart), timeGridDataRows.length - 1);
+            var isStartAtPrevDate = nextStart.getFullYear() < currentDate.getFullYear() || nextStart.getMonth() < currentDate.getMonth() || nextStart.getDate() < currentDate.getDate();
+            var isEndAtNextDate = nextEnd.getFullYear() > currentDate.getFullYear() || nextEnd.getMonth() > currentDate.getMonth() || nextEnd.getDate() > currentDate.getDate();
             var indexDiff = endIndex - (isStartAtPrevDate ? 0 : startIndex);
             var top = isStartAtPrevDate ? 0 : timeGridDataRows[startIndex].top;
             var height = isEndAtNextDate ? maxHeight : Math.max(indexDiff, 1) * rowHeight;
@@ -22687,7 +22760,7 @@
               if (type_isNil(gridDiff) || type_isNil(startDateTime)) {
                 return null;
               }
-              return addMilliseconds(startDateTime, gridDiff.rowDiff * MS_PER_THIRTY_MINUTES + gridDiff.columnDiff * datetime_MS_PER_DAY);
+              return addMilliseconds(startDateTime, gridDiff.rowDiff * MS_PER_THIRTY_MINUTES + gridDiff.columnDiff * MS_PER_DAY);
             }, [gridDiff, startDateTime]);
             var movingEvent = F(function() {
               if (type_isNil(draggingEvent) || type_isNil(currentGridPos) || type_isNil(gridDiff)) {
@@ -23153,16 +23226,48 @@
               uiModel.croppedEnd = true;
             }
           }
-          function setDimension(uiModel, options) {
-            var renderStart = options.renderStart, renderEnd = options.renderEnd, startColumnTime = options.startColumnTime, endColumnTime = options.endColumnTime, baseWidth = options.baseWidth, columnIndex = options.columnIndex;
-            var _getTopHeightByTime3 = getTopHeightByTime(renderStart, renderEnd, startColumnTime, endColumnTime), top = _getTopHeightByTime3.top, height = _getTopHeightByTime3.height;
-            var left = baseWidth * columnIndex;
-            uiModel.top = top;
-            uiModel.left = left;
-            uiModel.width = baseWidth;
-            uiModel.height = height < MIN_HEIGHT_PERCENT ? MIN_HEIGHT_PERCENT : height;
+          function getDuplicateLeft(uiModel, baseLeft) {
+            var duplicateEvents = uiModel.duplicateEvents, duplicateEventIndex = uiModel.duplicateEventIndex;
+            var prevEvent = duplicateEvents[duplicateEventIndex - 1];
+            var left = baseLeft;
+            if (prevEvent) {
+              var _extractPercentPx = extractPercentPx("".concat(prevEvent.duplicateLeft)), leftPercent = _extractPercentPx.percent, leftPx = _extractPercentPx.px;
+              var _extractPercentPx2 = extractPercentPx("".concat(prevEvent.duplicateWidth)), widthPercent = _extractPercentPx2.percent, widthPx = _extractPercentPx2.px;
+              var percent = leftPercent + widthPercent;
+              var px = leftPx + widthPx + TIME_EVENT_CONTAINER_MARGIN_LEFT;
+              if (percent !== 0) {
+                left = "calc(".concat(toPercent(percent), " ").concat(px > 0 ? "+" : "-", " ").concat(toPx(Math.abs(px)), ")");
+              } else {
+                left = toPx(px);
+              }
+            } else {
+              left = toPercent(left);
+            }
+            return left;
           }
-          function setRenderInfo(uiModel, columnIndex, baseWidth, startColumnTime, endColumnTime) {
+          function getDuplicateWidth(uiModel, baseWidth) {
+            var collapse = uiModel.collapse;
+            return collapse ? "".concat(COLLAPSED_DUPLICATE_EVENT_WIDTH_PX, "px") : "calc(".concat(toPercent(baseWidth), " - ").concat(toPx((COLLAPSED_DUPLICATE_EVENT_WIDTH_PX + TIME_EVENT_CONTAINER_MARGIN_LEFT) * (uiModel.duplicateEvents.length - 1) + TIME_EVENT_CONTAINER_MARGIN_LEFT), ")");
+          }
+          function setDimension(uiModel, options) {
+            var startColumnTime = options.startColumnTime, endColumnTime = options.endColumnTime, baseWidth = options.baseWidth, columnIndex = options.columnIndex, renderStart = options.renderStart, renderEnd = options.renderEnd;
+            var duplicateEvents = uiModel.duplicateEvents;
+            var _getTopHeightByTime3 = getTopHeightByTime(renderStart, renderEnd, startColumnTime, endColumnTime), top = _getTopHeightByTime3.top, height = _getTopHeightByTime3.height;
+            var dimension = {
+              top,
+              left: baseWidth * columnIndex,
+              width: baseWidth,
+              height: Math.max(MIN_HEIGHT_PERCENT, height),
+              duplicateLeft: "",
+              duplicateWidth: ""
+            };
+            if (duplicateEvents.length > 0) {
+              dimension.duplicateLeft = getDuplicateLeft(uiModel, dimension.left);
+              dimension.duplicateWidth = getDuplicateWidth(uiModel, dimension.width);
+            }
+            uiModel.setUIProps(dimension);
+          }
+          function getRenderInfoOptions(uiModel, columnIndex, baseWidth, startColumnTime, endColumnTime) {
             var _uiModel$model3 = uiModel.model, _uiModel$model3$going = _uiModel$model3.goingDuration, goingDuration = _uiModel$model3$going === void 0 ? 0 : _uiModel$model3$going, _uiModel$model3$comin = _uiModel$model3.comingDuration, comingDuration = _uiModel$model3$comin === void 0 ? 0 : _uiModel$model3$comin;
             var modelStart = uiModel.getStarts();
             var modelEnd = uiModel.getEnds();
@@ -23170,7 +23275,7 @@
             var comingEnd = addMinutes(modelEnd, comingDuration);
             var renderStart = max(goingStart, startColumnTime);
             var renderEnd = min(comingEnd, endColumnTime);
-            var renderInfoOptions = {
+            return {
               baseWidth,
               columnIndex,
               modelStart,
@@ -23180,26 +23285,103 @@
               goingStart,
               comingEnd,
               startColumnTime,
-              endColumnTime
+              endColumnTime,
+              duplicateEvents: uiModel.duplicateEvents
             };
+          }
+          function setRenderInfo(_ref) {
+            var uiModel = _ref.uiModel, columnIndex = _ref.columnIndex, baseWidth = _ref.baseWidth, startColumnTime = _ref.startColumnTime, endColumnTime = _ref.endColumnTime, _ref$isDuplicateEvent = _ref.isDuplicateEvent, isDuplicateEvent = _ref$isDuplicateEvent === void 0 ? false : _ref$isDuplicateEvent;
+            if (!isDuplicateEvent && uiModel.duplicateEvents.length > 0) {
+              uiModel.duplicateEvents.forEach(function(event) {
+                setRenderInfo({
+                  uiModel: event,
+                  columnIndex,
+                  baseWidth,
+                  startColumnTime,
+                  endColumnTime,
+                  isDuplicateEvent: true
+                });
+              });
+              return;
+            }
+            var renderInfoOptions = getRenderInfoOptions(uiModel, columnIndex, baseWidth, startColumnTime, endColumnTime);
             setDimension(uiModel, renderInfoOptions);
             setInnerHeights(uiModel, renderInfoOptions);
             setCroppedEdges(uiModel, renderInfoOptions);
           }
-          function setRenderInfoOfUIModels(events, startColumnTime, endColumnTime) {
+          function setDuplicateEvents(uiModels, options, selectedDuplicateEventCid) {
+            var getDuplicateEvents = options.getDuplicateEvents, getMainEvent = options.getMainEvent;
+            var eventObjects = uiModels.map(function(uiModel) {
+              return uiModel.model.toEventObject();
+            });
+            uiModels.forEach(function(targetUIModel) {
+              if (targetUIModel.collapse || targetUIModel.duplicateEvents.length > 0) {
+                return;
+              }
+              var duplicateEvents = getDuplicateEvents(targetUIModel.model.toEventObject(), eventObjects);
+              if (duplicateEvents.length <= 1) {
+                return;
+              }
+              var mainEvent = getMainEvent(duplicateEvents);
+              var duplicateEventUIModels = duplicateEvents.map(function(event) {
+                return uiModels.find(function(uiModel) {
+                  return uiModel.cid() === event.__cid;
+                });
+              });
+              var isSelectedGroup = !!(selectedDuplicateEventCid > DEFAULT_DUPLICATE_EVENT_CID && duplicateEvents.find(function(event) {
+                return event.__cid === selectedDuplicateEventCid;
+              }));
+              var duplicateStarts = duplicateEvents.reduce(function(acc, _ref2) {
+                var start = _ref2.start, goingDuration = _ref2.goingDuration;
+                var renderStart = addMinutes(start, -goingDuration);
+                return min(acc, renderStart);
+              }, duplicateEvents[0].start);
+              var duplicateEnds = duplicateEvents.reduce(function(acc, _ref3) {
+                var end = _ref3.end, comingDuration = _ref3.comingDuration;
+                var renderEnd = addMinutes(end, comingDuration);
+                return max(acc, renderEnd);
+              }, duplicateEvents[0].end);
+              duplicateEventUIModels.forEach(function(event, index) {
+                var isMain = event.cid() === mainEvent.__cid;
+                var collapse = !(isSelectedGroup && event.cid() === selectedDuplicateEventCid || !isSelectedGroup && isMain);
+                event.setUIProps({
+                  duplicateEvents: duplicateEventUIModels,
+                  duplicateEventIndex: index,
+                  collapse,
+                  isMain,
+                  duplicateStarts,
+                  duplicateEnds
+                });
+              });
+            });
+            return uiModels;
+          }
+          function setRenderInfoOfUIModels(events, startColumnTime, endColumnTime, selectedDuplicateEventCid, collapseDuplicateEventsOptions) {
             var uiModels = events.filter(isTimeEvent).filter(column_isBetween(startColumnTime, endColumnTime)).sort(array.compare.event.asc);
-            var uiModelColl = createEventCollection.apply(void 0, column_toConsumableArray(uiModels));
+            if (collapseDuplicateEventsOptions) {
+              setDuplicateEvents(uiModels, collapseDuplicateEventsOptions, selectedDuplicateEventCid);
+            }
+            var expandedEvents = uiModels.filter(function(uiModel) {
+              return !uiModel.collapse;
+            });
+            var uiModelColl = createEventCollection.apply(void 0, column_toConsumableArray(expandedEvents));
             var usingTravelTime = true;
-            var collisionGroups = getCollisionGroup(uiModels, usingTravelTime);
-            var matrices = getCollides(getMatrices(uiModelColl, collisionGroups, usingTravelTime));
+            var collisionGroups = getCollisionGroup(expandedEvents, usingTravelTime);
+            var matrices = getMatrices(uiModelColl, collisionGroups, usingTravelTime);
             matrices.forEach(function(matrix) {
               var maxRowLength = Math.max.apply(Math, column_toConsumableArray(matrix.map(function(row) {
                 return row.length;
               })));
-              var baseWidth = 100 / maxRowLength;
+              var baseWidth = Math.round(100 / maxRowLength);
               matrix.forEach(function(row) {
-                row.forEach(function(uiModel, col) {
-                  setRenderInfo(uiModel, col, baseWidth, startColumnTime, endColumnTime);
+                row.forEach(function(uiModel, columnIndex) {
+                  setRenderInfo({
+                    uiModel,
+                    columnIndex,
+                    baseWidth,
+                    startColumnTime,
+                    endColumnTime
+                  });
                 });
               });
             });
@@ -23299,8 +23481,11 @@
           };
           function TimeGrid(_ref) {
             var timeGridData = _ref.timeGridData, events = _ref.events;
-            var _useStore = useStore(optionsSelector), isReadOnly = _useStore.isReadOnly, _useStore$week = _useStore.week, narrowWeekend = _useStore$week.narrowWeekend, startDayOfWeek = _useStore$week.startDayOfWeek;
+            var _useStore = useStore(optionsSelector), isReadOnly = _useStore.isReadOnly, _useStore$week = _useStore.week, narrowWeekend = _useStore$week.narrowWeekend, startDayOfWeek = _useStore$week.startDayOfWeek, collapseDuplicateEvents = _useStore$week.collapseDuplicateEvents;
             var showNowIndicator = useStore(showNowIndicatorOptionSelector);
+            var selectedDuplicateEventCid = useStore(function(state) {
+              return state.weekViewLayout.selectedDuplicateEventCid;
+            });
             var _usePrimaryTimezone = usePrimaryTimezone(), _usePrimaryTimezone2 = timeGrid_slicedToArray(_usePrimaryTimezone, 2), getNow = _usePrimaryTimezone2[1];
             var isMounted = useIsMounted();
             var _useTheme = useTheme(weekTimeGridLeftSelector), timeGridLeftWidth = _useTheme.width;
@@ -23314,9 +23499,9 @@
                   return uiModel.clone();
                 });
               }).map(function(uiModelsByColumn, columnIndex) {
-                return setRenderInfoOfUIModels(uiModelsByColumn, setTimeStrToDate(columns[columnIndex].date, first(rows).startTime), setTimeStrToDate(columns[columnIndex].date, last(rows).endTime));
+                return setRenderInfoOfUIModels(uiModelsByColumn, setTimeStrToDate(columns[columnIndex].date, first(rows).startTime), setTimeStrToDate(columns[columnIndex].date, last(rows).endTime), selectedDuplicateEventCid, collapseDuplicateEvents);
               });
-            }, [columns, rows, events]);
+            }, [columns, rows, events, selectedDuplicateEventCid, collapseDuplicateEvents]);
             var currentDateData = F(function() {
               var now = getNow();
               var currentDateIndexInColumns = columns.findIndex(function(column) {
@@ -24536,7 +24721,7 @@
                 var preStartDate = movingEventUIModel.model.getStarts();
                 var eventDuration = movingEventUIModel.duration();
                 var currentDate = dateMatrix[currentGridPos.rowIndex][currentGridPos.columnIndex];
-                var timeOffsetPerDay = getDateDifference(currentDate, preStartDate) * datetime_MS_PER_DAY;
+                var timeOffsetPerDay = getDateDifference(currentDate, preStartDate) * MS_PER_DAY;
                 var newStartDate = new date_TZDate(preStartDate.getTime() + timeOffsetPerDay);
                 var newEndDate = new date_TZDate(newStartDate.getTime() + eventDuration);
                 eventBus.fire("beforeUpdateEvent", {

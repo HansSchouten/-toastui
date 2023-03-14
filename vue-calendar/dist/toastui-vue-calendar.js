@@ -5882,6 +5882,8 @@
     dragBackgroundColor: "#a1b56c",
     borderColor: "#000"
   };
+  const TIME_EVENT_CONTAINER_MARGIN_LEFT = 2;
+  const COLLAPSED_DUPLICATE_EVENT_WIDTH_PX = 9;
   function isBoolean(obj) {
     return typeof obj === "boolean" || obj instanceof Boolean;
   }
@@ -5931,6 +5933,16 @@
   }
   function toPx(value) {
     return `${value}px`;
+  }
+  function extractPercentPx(value) {
+    const percentRegexp = /(\d+)%/;
+    const percentResult = value.match(percentRegexp);
+    const pxRegexp = /(-?)\s?(\d+)px/;
+    const pxResult = value.match(pxRegexp);
+    return {
+      percent: percentResult ? parseInt(percentResult[1], 10) : 0,
+      px: pxResult ? parseInt(`${pxResult[1]}${pxResult[2]}`, 10) : 0
+    };
   }
   function getEventColors(uiModel, calendarColor) {
     const eventColors = uiModel.model.getColors();
@@ -6344,16 +6356,21 @@
     "left",
     "width",
     "height",
-    "hasCollide",
-    "extraSpace",
-    "hidden",
     "exceedLeft",
     "exceedRight",
     "croppedStart",
     "croppedEnd",
     "goingDurationHeight",
     "modelDurationHeight",
-    "comingDurationHeight"
+    "comingDurationHeight",
+    "duplicateEvents",
+    "duplicateEventIndex",
+    "duplicateStarts",
+    "duplicateEnds",
+    "duplicateLeft",
+    "duplicateWidth",
+    "collapse",
+    "isMain"
   ];
   class EventUIModel {
     constructor(event) {
@@ -6361,9 +6378,6 @@
       this.left = 0;
       this.width = 0;
       this.height = 0;
-      this.hasCollide = false;
-      this.extraSpace = 0;
-      this.hidden = false;
       this.exceedLeft = false;
       this.exceedRight = false;
       this.croppedStart = false;
@@ -6371,6 +6385,12 @@
       this.goingDurationHeight = 0;
       this.modelDurationHeight = 100;
       this.comingDurationHeight = 0;
+      this.duplicateEvents = [];
+      this.duplicateEventIndex = -1;
+      this.duplicateLeft = "";
+      this.duplicateWidth = "";
+      this.collapse = false;
+      this.isMain = false;
       this.model = event;
     }
     getUIProps() {
@@ -6401,15 +6421,35 @@
       return this.model.duration();
     }
     collidesWith(uiModel, usingTravelTime = true) {
+      const infos = [];
+      [this, uiModel].forEach((event) => {
+        const isDuplicateEvent = event instanceof EventUIModel && event.duplicateEvents.length > 0;
+        if (isDuplicateEvent) {
+          infos.push({
+            start: event.duplicateStarts,
+            end: event.duplicateEnds,
+            goingDuration: 0,
+            comingDuration: 0
+          });
+        } else {
+          infos.push({
+            start: event.getStarts(),
+            end: event.getEnds(),
+            goingDuration: event.valueOf().goingDuration,
+            comingDuration: event.valueOf().comingDuration
+          });
+        }
+      });
+      const [thisInfo, targetInfo] = infos;
       return collidesWith({
-        start: this.getStarts().getTime(),
-        end: this.getEnds().getTime(),
-        targetStart: uiModel.getStarts().getTime(),
-        targetEnd: uiModel.getEnds().getTime(),
-        goingDuration: this.model.goingDuration,
-        comingDuration: this.model.comingDuration,
-        targetGoingDuration: uiModel.valueOf().goingDuration,
-        targetComingDuration: uiModel.valueOf().comingDuration,
+        start: thisInfo.start.getTime(),
+        end: thisInfo.end.getTime(),
+        targetStart: targetInfo.start.getTime(),
+        targetEnd: targetInfo.end.getTime(),
+        goingDuration: thisInfo.goingDuration,
+        comingDuration: thisInfo.comingDuration,
+        targetGoingDuration: targetInfo.goingDuration,
+        targetComingDuration: targetInfo.comingDuration,
         usingTravelTime
       });
     }
@@ -6531,7 +6571,7 @@
     Day2[Day2["SAT"] = 6] = "SAT";
     return Day2;
   })(Day$2 || {});
-  const WEEK_DAYS = 28;
+  const WEEK_DAYS = 7;
   const dateFormatRx = /^(\d{4}[-|/]*\d{2}[-|/]*\d{2})\s?(\d{2}:\d{2}:\d{2})?$/;
   const memo = {
     millisecondsTo: {},
@@ -6803,7 +6843,7 @@
     const _d2 = new TZDate(d2.getFullYear(), d2.getMonth(), d2.getDate()).getTime();
     return Math.round((_d1 - _d2) / MS_PER_DAY);
   }
-  function hasCollision$1(start, end, targetStart, targetEnd) {
+  function hasCollision(start, end, targetStart, targetEnd) {
     return targetStart > start && targetStart < end || targetEnd > start && targetEnd < end || targetStart <= start && targetEnd >= end;
   }
   function collidesWith({
@@ -6829,7 +6869,7 @@
       targetStart -= millisecondsFrom("minute", targetGoingDuration);
       targetEnd += millisecondsFrom("minute", targetComingDuration);
     }
-    return hasCollision$1(start, end, targetStart, targetEnd);
+    return hasCollision(start, end, targetStart, targetEnd);
   }
   function isSameEvent(event, eventId, calendarId) {
     return event.id === eventId && event.calendarId === calendarId;
@@ -7042,6 +7082,7 @@
       return {
         id: this.id,
         calendarId: this.calendarId,
+        __cid: this.cid(),
         title: this.title,
         body: this.body,
         isAllday: this.isAllday,
@@ -7439,6 +7480,7 @@
     };
   }
   const DEFAULT_RESIZER_LENGTH = 3;
+  const DEFAULT_DUPLICATE_EVENT_CID = -1;
   function getRestPanelHeight(dayGridRowsState, lastPanelType, initHeight) {
     return Object.keys(dayGridRowsState).reduce((acc, rowName) => {
       if (rowName === lastPanelType) {
@@ -7452,7 +7494,8 @@
       layout: 500,
       weekViewLayout: {
         lastPanelType: null,
-        dayGridRows: {}
+        dayGridRows: {},
+        selectedDuplicateEventCid: DEFAULT_DUPLICATE_EVENT_CID
       }
     };
   }
@@ -7488,6 +7531,9 @@
         if (lastPanelType) {
           state.weekViewLayout.dayGridRows[lastPanelType].height = getRestPanelHeight(state.weekViewLayout.dayGridRows, lastPanelType, state.layout);
         }
+      })),
+      setSelectedDuplicateEventCid: (cid) => set(produce((state) => {
+        state.weekViewLayout.selectedDuplicateEventCid = cid != null ? cid : DEFAULT_DUPLICATE_EVENT_CID;
       }))
     };
   }
@@ -7512,8 +7558,21 @@
       };
     });
   }
+  function initializeCollapseDuplicateEvents(options) {
+    if (!options) {
+      return false;
+    }
+    const initialCollapseDuplicateEvents = {
+      getDuplicateEvents: (targetEvent, events) => events.filter((event) => event.title === targetEvent.title && compare(event.start, targetEvent.start) === 0 && compare(event.end, targetEvent.end) === 0).sort((a2, b2) => a2.calendarId > b2.calendarId ? 1 : -1),
+      getMainEvent: (events) => last(events)
+    };
+    if (isBoolean_1(options)) {
+      return initialCollapseDuplicateEvents;
+    }
+    return __spreadValues(__spreadValues({}, initialCollapseDuplicateEvents), options);
+  }
   function initializeWeekOptions(weekOptions = {}) {
-    return __spreadValues({
+    const week = __spreadValues({
       startDayOfWeek: Day$2.SUN,
       dayNames: [],
       narrowWeekend: false,
@@ -7524,8 +7583,11 @@
       hourStart: 0,
       hourEnd: 24,
       eventView: true,
-      taskView: true
+      taskView: true,
+      collapseDuplicateEvents: false
     }, weekOptions);
+    week.collapseDuplicateEvents = initializeCollapseDuplicateEvents(week.collapseDuplicateEvents);
+    return week;
   }
   function initializeTimezoneOptions(timezoneOptions = {}) {
     return __spreadValues({
@@ -7580,6 +7642,13 @@
   function createOptionsDispatchers(set) {
     return {
       setOptions: (newOptions = {}) => set(produce((state) => {
+        var _a;
+        if (newOptions.gridSelection) {
+          newOptions.gridSelection = initializeGridSelectionOptions(newOptions.gridSelection);
+        }
+        if ((_a = newOptions.week) == null ? void 0 : _a.collapseDuplicateEvents) {
+          newOptions.week.collapseDuplicateEvents = initializeCollapseDuplicateEvents(newOptions.week.collapseDuplicateEvents);
+        }
         mergeObject(state.options, newOptions);
       }))
     };
@@ -9553,80 +9622,6 @@
     }
     return matrices;
   }
-  function generateTimeArrayInRow(matrix) {
-    var _a, _b;
-    const map = [];
-    const maxColLen = Math.max(...matrix.map((col2) => col2.length));
-    let cursor = [];
-    let row;
-    let col;
-    let event;
-    let start;
-    let end;
-    for (col = 1; col < maxColLen; col += 1) {
-      row = 0;
-      event = (_a = matrix == null ? void 0 : matrix[row]) == null ? void 0 : _a[col];
-      while (event) {
-        const { goingDuration, comingDuration } = event.valueOf();
-        start = event.getStarts().getTime() - millisecondsFrom("minute", goingDuration);
-        end = event.getEnds().getTime() + millisecondsFrom("minute", comingDuration);
-        if (Math.abs(end - start) < MS_EVENT_MIN_DURATION) {
-          end += MS_EVENT_MIN_DURATION;
-        }
-        cursor.push([start, end]);
-        row += 1;
-        event = (_b = matrix == null ? void 0 : matrix[row]) == null ? void 0 : _b[col];
-      }
-      map.push(cursor);
-      cursor = [];
-    }
-    return map;
-  }
-  function searchFunc(index) {
-    return (block) => block[index];
-  }
-  function hasCollision(arr, start, end) {
-    if (!(arr == null ? void 0 : arr.length)) {
-      return false;
-    }
-    const compare2 = array.compare.num.asc;
-    const startStart = Math.abs(array.bsearch(arr, start, searchFunc(0), compare2));
-    const startEnd = Math.abs(array.bsearch(arr, start, searchFunc(1), compare2));
-    const endStart = Math.abs(array.bsearch(arr, end, searchFunc(0), compare2));
-    const endEnd = Math.abs(array.bsearch(arr, end, searchFunc(1), compare2));
-    return !(startStart === startEnd && startEnd === endStart && endStart === endEnd);
-  }
-  function getCollides(matrices) {
-    matrices.forEach((matrix) => {
-      const binaryMap = generateTimeArrayInRow(matrix);
-      const maxRowLength = Math.max(...matrix.map((row) => row.length));
-      matrix.forEach((row) => {
-        row.forEach((uiModel, col) => {
-          if (!uiModel) {
-            return;
-          }
-          const { goingDuration, comingDuration } = uiModel.model;
-          let startTime = uiModel.getStarts().getTime();
-          let endTime = uiModel.getEnds().getTime();
-          if (Math.abs(endTime - startTime) < MS_EVENT_MIN_DURATION) {
-            endTime += MS_EVENT_MIN_DURATION;
-          }
-          startTime -= millisecondsFrom("minute", goingDuration);
-          endTime += millisecondsFrom("minute", comingDuration);
-          endTime -= 1;
-          for (let i2 = col + 1; i2 < maxRowLength; i2 += 1) {
-            const collided = hasCollision(binaryMap[i2 - 1], startTime, endTime);
-            if (collided) {
-              uiModel.hasCollide = true;
-              break;
-            }
-            uiModel.extraSpace += 1;
-          }
-        });
-      });
-    });
-    return matrices;
-  }
   function _makeHourRangeFilter(hStart, hEnd) {
     return (uiModel) => {
       const ownHourStart = uiModel.getStarts();
@@ -9680,7 +9675,7 @@
       const uiModels = _getUIModel(uiModelColl);
       const collisionGroups = getCollisionGroup(uiModels, usingTravelTime);
       const matrices = getMatrices(uiModelColl, collisionGroups, usingTravelTime);
-      result[ymd] = getCollides(matrices);
+      result[ymd] = matrices;
     });
     return result;
   }
@@ -10085,7 +10080,7 @@
       endRowIndex: isReversed ? initPos.rowIndex : currentPos.rowIndex
     };
   }
-  function calculateTimeGridSelectionByCurrentIndex(timeGridSelection, columnIndex) {
+  function calculateTimeGridSelectionByCurrentIndex(timeGridSelection, columnIndex, maxRowIndex) {
     if (isNil(timeGridSelection)) {
       return null;
     }
@@ -10103,10 +10098,10 @@
     };
     if (startColumnIndex < columnIndex && columnIndex < endColumnIndex) {
       resultGridSelection.startRowIndex = 0;
-      resultGridSelection.endRowIndex = 47;
+      resultGridSelection.endRowIndex = maxRowIndex;
     } else if (startColumnIndex !== endColumnIndex) {
       if (startColumnIndex === columnIndex) {
-        resultGridSelection.endRowIndex = 47;
+        resultGridSelection.endRowIndex = maxRowIndex;
       } else if (endColumnIndex === columnIndex) {
         resultGridSelection.startRowIndex = 0;
       }
@@ -11585,6 +11580,7 @@
     return { top, direction };
   }
   function EventDetailPopup() {
+    const { useFormPopup } = useStore(optionsSelector);
     const popupParams = useStore(eventDetailPopupParamSelector);
     const { event, eventRect } = popupParams != null ? popupParams : {};
     const { showFormPopup, hideDetailPopup } = useDispatch("popup");
@@ -11629,18 +11625,24 @@
       top: eventRect.top + eventRect.height / 2,
       left: eventRect.left + eventRect.width / 2
     };
-    const onClickEditButton = () => showFormPopup({
-      isCreationPopup: false,
-      event,
-      title,
-      location: location2,
-      start,
-      end,
-      isAllday: isAllday2,
-      isPrivate,
-      eventState: state,
-      popupArrowPointPosition
-    });
+    const onClickEditButton = () => {
+      if (useFormPopup) {
+        showFormPopup({
+          isCreationPopup: false,
+          event,
+          title,
+          location: location2,
+          start,
+          end,
+          isAllday: isAllday2,
+          isPrivate,
+          eventState: state,
+          popupArrowPointPosition
+        });
+      } else {
+        eventBus.fire("beforeUpdateEvent", { event: event.toEventObject(), changes: {} });
+      }
+    };
     const onClickDeleteButton = () => {
       eventBus.fire("beforeDeleteEvent", event.toEventObject());
       hideDetailPopup();
@@ -11743,28 +11745,47 @@
     return { isOpened, setOpened, toggleDropdown };
   }
   var FormStateActionType = /* @__PURE__ */ ((FormStateActionType2) => {
+    FormStateActionType2["init"] = "init";
     FormStateActionType2["setCalendarId"] = "setCalendarId";
+    FormStateActionType2["setTitle"] = "setTitle";
+    FormStateActionType2["setLocation"] = "setLocation";
     FormStateActionType2["setPrivate"] = "setPrivate";
     FormStateActionType2["setAllday"] = "setAllday";
     FormStateActionType2["setState"] = "setState";
+    FormStateActionType2["reset"] = "reset";
     return FormStateActionType2;
   })(FormStateActionType || {});
+  const defaultFormState = {
+    title: "",
+    location: "",
+    isAllday: false,
+    isPrivate: false,
+    state: "Busy"
+  };
   function formStateReducer(state, action) {
     switch (action.type) {
+      case "init":
+        return __spreadValues(__spreadValues({}, defaultFormState), action.event);
       case "setCalendarId":
         return __spreadProps(__spreadValues({}, state), { calendarId: action.calendarId });
+      case "setTitle":
+        return __spreadProps(__spreadValues({}, state), { title: action.title });
+      case "setLocation":
+        return __spreadProps(__spreadValues({}, state), { location: action.location });
       case "setPrivate":
         return __spreadProps(__spreadValues({}, state), { isPrivate: action.isPrivate });
       case "setAllday":
         return __spreadProps(__spreadValues({}, state), { isAllday: action.isAllday });
       case "setState":
         return __spreadProps(__spreadValues({}, state), { state: action.state });
+      case "reset":
+        return __spreadValues(__spreadValues({}, state), defaultFormState);
       default:
         return state;
     }
   }
-  function useFormState(initialState) {
-    return d$2(formStateReducer, initialState);
+  function useFormState(initCalendarId) {
+    return d$2(formStateReducer, __spreadValues({ calendarId: initCalendarId }, defaultFormState));
   }
   const classNames$f = {
     popupSection: ["dropdown-section", "calendar-section"],
@@ -12005,11 +12026,14 @@
     locationIcon: cls("icon", "ic-location"),
     content: cls("content")
   };
-  function LocationInputBox({ location: location2 }) {
+  function LocationInputBox({ location: location2, formStateDispatch }) {
     const locationPlaceholder = useStringOnlyTemplate({
       template: "locationPlaceholder",
       defaultValue: "Location"
     });
+    const handleLocationChange = (e2) => {
+      formStateDispatch({ type: FormStateActionType.setLocation, location: e2.currentTarget.value });
+    };
     return /* @__PURE__ */ h$3(PopupSection, null, /* @__PURE__ */ h$3("div", {
       className: classNames$9.popupSectionItem
     }, /* @__PURE__ */ h$3("span", {
@@ -12018,7 +12042,8 @@
       name: "location",
       className: classNames$9.content,
       placeholder: locationPlaceholder,
-      value: location2
+      value: location2,
+      onChange: handleLocationChange
     })));
   }
   const classNames$8 = {
@@ -12033,6 +12058,9 @@
       defaultValue: "Subject"
     });
     const togglePrivate = () => formStateDispatch({ type: FormStateActionType.setPrivate, isPrivate: !isPrivate });
+    const handleInputChange = (e2) => {
+      formStateDispatch({ type: FormStateActionType.setTitle, title: e2.currentTarget.value });
+    };
     return /* @__PURE__ */ h$3(PopupSection, null, /* @__PURE__ */ h$3("div", {
       className: classNames$8.popupSectionItem
     }, /* @__PURE__ */ h$3("span", {
@@ -12042,6 +12070,7 @@
       className: classNames$8.content,
       placeholder: titlePlaceholder,
       value: title,
+      onChange: handleInputChange,
       required: true
     })), /* @__PURE__ */ h$3("button", {
       type: "button",
@@ -12100,35 +12129,14 @@
     }, {});
   }
   function EventFormPopup() {
-    var _a, _b;
+    var _a;
     const { calendars } = useStore(calendarSelector);
     const { hideAllPopup } = useDispatch("popup");
     const popupParams = useStore(eventFormPopupParamSelector);
-    const {
-      title,
-      location: location2,
-      start,
-      end,
-      isAllday: isAllday2 = false,
-      isPrivate = false,
-      eventState = "Busy",
-      popupArrowPointPosition,
-      close,
-      isCreationPopup,
-      event
-    } = popupParams != null ? popupParams : {};
+    const { start, end, popupArrowPointPosition, close, isCreationPopup, event } = popupParams != null ? popupParams : {};
     const eventBus = useEventBus();
     const formPopupSlot = useFloatingLayer("formPopupSlot");
-    const [formState, formStateDispatch] = useFormState({
-      title,
-      location: location2,
-      start,
-      end,
-      isAllday: isAllday2,
-      isPrivate,
-      calendarId: (_b = event == null ? void 0 : event.calendarId) != null ? _b : (_a = calendars[0]) == null ? void 0 : _a.id,
-      state: eventState
-    });
+    const [formState, formStateDispatch] = useFormState((_a = calendars[0]) == null ? void 0 : _a.id);
     const datePickerRef = s$2(null);
     const popupContainerRef = s$2(null);
     const [style, setStyle] = y$1({});
@@ -12151,11 +12159,31 @@
         setArrowDirection(direction);
       }
     }, [layoutContainer, popupArrowPointPosition]);
+    _$2(() => {
+      if (isPresent(popupParams) && isPresent(event)) {
+        formStateDispatch({
+          type: FormStateActionType.init,
+          event: {
+            title: popupParams.title,
+            location: popupParams.location,
+            isAllday: popupParams.isAllday,
+            isPrivate: popupParams.isPrivate,
+            calendarId: event.calendarId,
+            state: popupParams.eventState
+          }
+        });
+      }
+    }, [calendars, event, formStateDispatch, popupParams]);
+    _$2(() => {
+      if (isNil(popupParams)) {
+        formStateDispatch({ type: FormStateActionType.reset });
+      }
+    }, [formStateDispatch, popupParams]);
     if (isNil(start) || isNil(end) || isNil(formPopupSlot)) {
       return null;
     }
     const onSubmit = (e2) => {
-      var _a2, _b2;
+      var _a2, _b;
       e2.preventDefault();
       const formData = new FormData(e2.target);
       const eventData = __spreadValues({}, formState);
@@ -12163,7 +12191,7 @@
         eventData[key] = isBooleanKey(key) ? data === "true" : data;
       });
       eventData.start = new TZDate((_a2 = datePickerRef.current) == null ? void 0 : _a2.getStartDate());
-      eventData.end = new TZDate((_b2 = datePickerRef.current) == null ? void 0 : _b2.getEndDate());
+      eventData.end = new TZDate((_b = datePickerRef.current) == null ? void 0 : _b.getEndDate());
       if (isCreationPopup) {
         eventBus.fire("beforeCreateEvent", eventData);
       } else if (event) {
@@ -12186,11 +12214,12 @@
       calendars,
       formStateDispatch
     }) : /* @__PURE__ */ h$3(PopupSection, null), /* @__PURE__ */ h$3(TitleInputBox, {
-      title,
+      title: formState.title,
       isPrivate: formState.isPrivate,
       formStateDispatch
     }), /* @__PURE__ */ h$3(LocationInputBox, {
-      location: location2
+      location: formState.location,
+      formStateDispatch
     }), /* @__PURE__ */ h$3(DateSelector, {
       start,
       end,
@@ -12502,6 +12531,19 @@
     moveEvent: cls("dragging--move-event"),
     resizeEvent: cls("dragging--resize-vertical-event")
   };
+  function getMarginLeft(left) {
+    const { percent, px } = extractPercentPx(`${left}`);
+    return left > 0 || percent > 0 || px > 0 ? TIME_EVENT_CONTAINER_MARGIN_LEFT : 0;
+  }
+  function getContainerWidth(width, marginLeft) {
+    if (isString_1(width)) {
+      return width;
+    }
+    if (width >= 0) {
+      return `calc(${toPercent(width)} - ${marginLeft}px)`;
+    }
+    return "";
+  }
   function getStyles({
     uiModel,
     isDraggingTarget,
@@ -12514,6 +12556,8 @@
       left,
       height,
       width,
+      duplicateLeft,
+      duplicateWidth,
       goingDurationHeight,
       modelDurationHeight,
       comingDurationHeight,
@@ -12522,15 +12566,14 @@
     } = uiModel;
     const travelBorderColor = "white";
     const borderRadius = 2;
-    const paddingLeft = 2;
     const defaultMarginBottom = 2;
-    const marginLeft = left > 0 ? paddingLeft : 0;
+    const marginLeft = getMarginLeft(left);
     const { color, backgroundColor, borderColor, dragBackgroundColor } = getEventColors(uiModel, calendarColor);
     const containerStyle = {
-      width: width >= 0 ? `calc(${toPercent(width)} - ${marginLeft}px)` : "",
+      width: getContainerWidth(duplicateWidth || width, marginLeft),
       height: `calc(${toPercent(Math.max(height, minHeight))} - ${defaultMarginBottom}px)`,
       top: toPercent(top),
-      left: toPercent(left),
+      left: duplicateLeft || toPercent(left),
       borderRadius,
       borderLeft: `3px solid ${borderColor}`,
       marginLeft,
@@ -12580,11 +12623,17 @@
     isResizingGuide = false,
     minHeight = 0
   }) {
-    const { useDetailPopup, isReadOnly: isReadOnlyCalendar } = useStore(optionsSelector);
+    const {
+      useDetailPopup,
+      isReadOnly: isReadOnlyCalendar,
+      week: weekOptions
+    } = useStore(optionsSelector);
     const calendarColor = useCalendarColor(uiModel.model);
+    const { collapseDuplicateEvents } = weekOptions;
     const layoutContainer = useLayoutContainer();
     const { showDetailPopup } = useDispatch("popup");
     const { setDraggingEventUIModel } = useDispatch("dnd");
+    const { setSelectedDuplicateEventCid } = useDispatch("weekViewLayout");
     const eventBus = useEventBus();
     const eventContainerRef = s$2(null);
     const [isDraggingTarget, setIsDraggingTarget] = y$1(false);
@@ -12622,6 +12671,10 @@
       onMouseUp: (e2, { draggingState }) => {
         endDragEvent(classNames$5.moveEvent);
         const isClick = draggingState <= DraggingState.INIT;
+        if (isClick && collapseDuplicateEvents) {
+          const selectedDuplicateEventCid = uiModel.duplicateEvents.length > 0 ? uiModel.cid() : DEFAULT_DUPLICATE_EVENT_CID;
+          setSelectedDuplicateEventCid(selectedDuplicateEventCid);
+        }
         if (isClick && useDetailPopup && eventContainerRef.current) {
           showDetailPopup({
             event: uiModel.model,
@@ -12706,7 +12759,7 @@
     }, text) : null);
   }
   function GridSelectionByColumn({ columnIndex, timeGridRows }) {
-    const gridSelectionData = useStore(T$1((state) => timeGridSelectionHelper.calculateSelection(state.gridSelection.timeGrid, columnIndex), [columnIndex]));
+    const gridSelectionData = useStore(T$1((state) => timeGridSelectionHelper.calculateSelection(state.gridSelection.timeGrid, columnIndex, timeGridRows.length - 1), [columnIndex, timeGridRows]));
     const gridSelectionProps = F$2(() => {
       if (!gridSelectionData) {
         return null;
@@ -12984,8 +13037,8 @@
     }));
   });
   const THIRTY_MINUTES = 30;
-  function getCurrentIndexByTime(time) {
-    const hour = time.getHours();
+  function getCurrentIndexByTime(time, hourStart) {
+    const hour = time.getHours() - hourStart;
     const minutes = time.getMinutes();
     return hour * 2 + Math.floor(minutes / THIRTY_MINUTES);
   }
@@ -12999,15 +13052,16 @@
     const rowHeight = timeGridDataRows[0].height;
     const maxHeight = rowHeight * timeGridDataRows.length;
     const millisecondsDiff = rowDiff * MS_PER_THIRTY_MINUTES + columnDiff * MS_PER_DAY;
+    const hourStart = Number(timeGridDataRows[0].startTime.split(":")[0]);
     const { goingDuration = 0, comingDuration = 0 } = draggingEvent.model;
     const goingStart = addMinutes(draggingEvent.getStarts(), -goingDuration);
     const comingEnd = addMinutes(draggingEvent.getEnds(), comingDuration);
     const nextStart = addMilliseconds(goingStart, millisecondsDiff);
     const nextEnd = addMilliseconds(comingEnd, millisecondsDiff);
-    const startIndex = getCurrentIndexByTime(nextStart);
-    const endIndex = getCurrentIndexByTime(nextEnd);
-    const isStartAtPrevDate = nextStart.getDate() < currentDate.getDate();
-    const isEndAtNextDate = nextEnd.getDate() > currentDate.getDate();
+    const startIndex = Math.max(getCurrentIndexByTime(nextStart, hourStart), 0);
+    const endIndex = Math.min(getCurrentIndexByTime(nextEnd, hourStart), timeGridDataRows.length - 1);
+    const isStartAtPrevDate = nextStart.getFullYear() < currentDate.getFullYear() || nextStart.getMonth() < currentDate.getMonth() || nextStart.getDate() < currentDate.getDate();
+    const isEndAtNextDate = nextEnd.getFullYear() > currentDate.getFullYear() || nextEnd.getMonth() > currentDate.getMonth() || nextEnd.getDate() > currentDate.getDate();
     const indexDiff = endIndex - (isStartAtPrevDate ? 0 : startIndex);
     const top = isStartAtPrevDate ? 0 : timeGridDataRows[startIndex].top;
     const height = isEndAtNextDate ? maxHeight : Math.max(indexDiff, 1) * rowHeight;
@@ -13406,16 +13460,48 @@
       uiModel.croppedEnd = true;
     }
   }
-  function setDimension(uiModel, options) {
-    const { renderStart, renderEnd, startColumnTime, endColumnTime, baseWidth, columnIndex } = options;
-    const { top, height } = getTopHeightByTime(renderStart, renderEnd, startColumnTime, endColumnTime);
-    const left = baseWidth * columnIndex;
-    uiModel.top = top;
-    uiModel.left = left;
-    uiModel.width = baseWidth;
-    uiModel.height = height < MIN_HEIGHT_PERCENT ? MIN_HEIGHT_PERCENT : height;
+  function getDuplicateLeft(uiModel, baseLeft) {
+    const { duplicateEvents, duplicateEventIndex } = uiModel;
+    const prevEvent = duplicateEvents[duplicateEventIndex - 1];
+    let left = baseLeft;
+    if (prevEvent) {
+      const { percent: leftPercent, px: leftPx } = extractPercentPx(`${prevEvent.duplicateLeft}`);
+      const { percent: widthPercent, px: widthPx } = extractPercentPx(`${prevEvent.duplicateWidth}`);
+      const percent = leftPercent + widthPercent;
+      const px = leftPx + widthPx + TIME_EVENT_CONTAINER_MARGIN_LEFT;
+      if (percent !== 0) {
+        left = `calc(${toPercent(percent)} ${px > 0 ? "+" : "-"} ${toPx(Math.abs(px))})`;
+      } else {
+        left = toPx(px);
+      }
+    } else {
+      left = toPercent(left);
+    }
+    return left;
   }
-  function setRenderInfo(uiModel, columnIndex, baseWidth, startColumnTime, endColumnTime) {
+  function getDuplicateWidth(uiModel, baseWidth) {
+    const { collapse } = uiModel;
+    return collapse ? `${COLLAPSED_DUPLICATE_EVENT_WIDTH_PX}px` : `calc(${toPercent(baseWidth)} - ${toPx((COLLAPSED_DUPLICATE_EVENT_WIDTH_PX + TIME_EVENT_CONTAINER_MARGIN_LEFT) * (uiModel.duplicateEvents.length - 1) + TIME_EVENT_CONTAINER_MARGIN_LEFT)})`;
+  }
+  function setDimension(uiModel, options) {
+    const { startColumnTime, endColumnTime, baseWidth, columnIndex, renderStart, renderEnd } = options;
+    const { duplicateEvents } = uiModel;
+    const { top, height } = getTopHeightByTime(renderStart, renderEnd, startColumnTime, endColumnTime);
+    const dimension = {
+      top,
+      left: baseWidth * columnIndex,
+      width: baseWidth,
+      height: Math.max(MIN_HEIGHT_PERCENT, height),
+      duplicateLeft: "",
+      duplicateWidth: ""
+    };
+    if (duplicateEvents.length > 0) {
+      dimension.duplicateLeft = getDuplicateLeft(uiModel, dimension.left);
+      dimension.duplicateWidth = getDuplicateWidth(uiModel, dimension.width);
+    }
+    uiModel.setUIProps(dimension);
+  }
+  function getRenderInfoOptions(uiModel, columnIndex, baseWidth, startColumnTime, endColumnTime) {
     const { goingDuration = 0, comingDuration = 0 } = uiModel.model;
     const modelStart = uiModel.getStarts();
     const modelEnd = uiModel.getEnds();
@@ -13423,7 +13509,7 @@
     const comingEnd = addMinutes(modelEnd, comingDuration);
     const renderStart = max(goingStart, startColumnTime);
     const renderEnd = min(comingEnd, endColumnTime);
-    const renderInfoOptions = {
+    return {
       baseWidth,
       columnIndex,
       modelStart,
@@ -13433,24 +13519,89 @@
       goingStart,
       comingEnd,
       startColumnTime,
-      endColumnTime
+      endColumnTime,
+      duplicateEvents: uiModel.duplicateEvents
     };
+  }
+  function setRenderInfo({
+    uiModel,
+    columnIndex,
+    baseWidth,
+    startColumnTime,
+    endColumnTime,
+    isDuplicateEvent = false
+  }) {
+    if (!isDuplicateEvent && uiModel.duplicateEvents.length > 0) {
+      uiModel.duplicateEvents.forEach((event) => {
+        setRenderInfo({
+          uiModel: event,
+          columnIndex,
+          baseWidth,
+          startColumnTime,
+          endColumnTime,
+          isDuplicateEvent: true
+        });
+      });
+      return;
+    }
+    const renderInfoOptions = getRenderInfoOptions(uiModel, columnIndex, baseWidth, startColumnTime, endColumnTime);
     setDimension(uiModel, renderInfoOptions);
     setInnerHeights(uiModel, renderInfoOptions);
     setCroppedEdges(uiModel, renderInfoOptions);
   }
-  function setRenderInfoOfUIModels(events, startColumnTime, endColumnTime) {
+  function setDuplicateEvents(uiModels, options, selectedDuplicateEventCid) {
+    const { getDuplicateEvents, getMainEvent } = options;
+    const eventObjects = uiModels.map((uiModel) => uiModel.model.toEventObject());
+    uiModels.forEach((targetUIModel) => {
+      if (targetUIModel.collapse || targetUIModel.duplicateEvents.length > 0) {
+        return;
+      }
+      const duplicateEvents = getDuplicateEvents(targetUIModel.model.toEventObject(), eventObjects);
+      if (duplicateEvents.length <= 1) {
+        return;
+      }
+      const mainEvent = getMainEvent(duplicateEvents);
+      const duplicateEventUIModels = duplicateEvents.map((event) => uiModels.find((uiModel) => uiModel.cid() === event.__cid));
+      const isSelectedGroup = !!(selectedDuplicateEventCid > DEFAULT_DUPLICATE_EVENT_CID && duplicateEvents.find((event) => event.__cid === selectedDuplicateEventCid));
+      const duplicateStarts = duplicateEvents.reduce((acc, { start, goingDuration }) => {
+        const renderStart = addMinutes(start, -goingDuration);
+        return min(acc, renderStart);
+      }, duplicateEvents[0].start);
+      const duplicateEnds = duplicateEvents.reduce((acc, { end, comingDuration }) => {
+        const renderEnd = addMinutes(end, comingDuration);
+        return max(acc, renderEnd);
+      }, duplicateEvents[0].end);
+      duplicateEventUIModels.forEach((event, index) => {
+        const isMain = event.cid() === mainEvent.__cid;
+        const collapse = !(isSelectedGroup && event.cid() === selectedDuplicateEventCid || !isSelectedGroup && isMain);
+        event.setUIProps({
+          duplicateEvents: duplicateEventUIModels,
+          duplicateEventIndex: index,
+          collapse,
+          isMain,
+          duplicateStarts,
+          duplicateEnds
+        });
+      });
+    });
+    return uiModels;
+  }
+  function setRenderInfoOfUIModels(events, startColumnTime, endColumnTime, selectedDuplicateEventCid, collapseDuplicateEventsOptions) {
     const uiModels = events.filter(isTimeEvent).filter(isBetween(startColumnTime, endColumnTime)).sort(array.compare.event.asc);
-    const uiModelColl = createEventCollection(...uiModels);
+    if (collapseDuplicateEventsOptions) {
+      setDuplicateEvents(uiModels, collapseDuplicateEventsOptions, selectedDuplicateEventCid);
+    }
+    const expandedEvents = uiModels.filter((uiModel) => !uiModel.collapse);
+    const uiModelColl = createEventCollection(...expandedEvents);
     const usingTravelTime = true;
-    const collisionGroups = getCollisionGroup(uiModels, usingTravelTime);
-    const matrices = getCollides(getMatrices(uiModelColl, collisionGroups, usingTravelTime));
+    const collisionGroups = getCollisionGroup(expandedEvents, usingTravelTime);
+    const matrices = getMatrices(uiModelColl, collisionGroups, usingTravelTime);
     matrices.forEach((matrix) => {
       const maxRowLength = Math.max(...matrix.map((row) => row.length));
-      const baseWidth = 100 / maxRowLength;
+      const baseWidth = Math.round(100 / maxRowLength);
       matrix.forEach((row) => {
-        row.forEach((uiModel, col) => {
-          setRenderInfo(uiModel, col, baseWidth, startColumnTime, endColumnTime);
+        row.forEach((uiModel, columnIndex) => {
+          setRenderInfo({ uiModel, columnIndex, baseWidth, startColumnTime, endColumnTime });
         });
       });
     });
@@ -13486,16 +13637,17 @@
   function TimeGrid({ timeGridData, events }) {
     const {
       isReadOnly,
-      week: { narrowWeekend, startDayOfWeek }
+      week: { narrowWeekend, startDayOfWeek, collapseDuplicateEvents }
     } = useStore(optionsSelector);
     const showNowIndicator = useStore(showNowIndicatorOptionSelector);
+    const selectedDuplicateEventCid = useStore((state) => state.weekViewLayout.selectedDuplicateEventCid);
     const [, getNow] = usePrimaryTimezone();
     const isMounted = useIsMounted();
     const { width: timeGridLeftWidth } = useTheme(weekTimeGridLeftSelector);
     const [nowIndicatorState, setNowIndicatorState] = y$1(null);
     const { columns, rows } = timeGridData;
     const lastColumnIndex = columns.length - 1;
-    const totalUIModels = F$2(() => columns.map(({ date: date2 }) => events.filter(isBetween(toStartOfDay(date2), toEndOfDay(date2))).map((uiModel) => uiModel.clone())).map((uiModelsByColumn, columnIndex) => setRenderInfoOfUIModels(uiModelsByColumn, setTimeStrToDate(columns[columnIndex].date, first(rows).startTime), setTimeStrToDate(columns[columnIndex].date, last(rows).endTime))), [columns, rows, events]);
+    const totalUIModels = F$2(() => columns.map(({ date: date2 }) => events.filter(isBetween(toStartOfDay(date2), toEndOfDay(date2))).map((uiModel) => uiModel.clone())).map((uiModelsByColumn, columnIndex) => setRenderInfoOfUIModels(uiModelsByColumn, setTimeStrToDate(columns[columnIndex].date, first(rows).startTime), setTimeStrToDate(columns[columnIndex].date, last(rows).endTime), selectedDuplicateEventCid, collapseDuplicateEvents)), [columns, rows, events, selectedDuplicateEventCid, collapseDuplicateEvents]);
     const currentDateData = F$2(() => {
       const now = getNow();
       const currentDateIndexInColumns = columns.findIndex((column) => isSameDate(column.date, now));
