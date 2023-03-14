@@ -7450,7 +7450,7 @@ let Day;
   Day[Day["SAT"] = 6] = "SAT";
 })(Day || (Day = {}));
 
-const WEEK_DAYS = 7;
+const WEEK_DAYS = 28;
 const dateFormatRx = /^(\d{4}[-|/]*\d{2}[-|/]*\d{2})\s?(\d{2}:\d{2}:\d{2})?$/;
 const memo = {
   millisecondsTo: {},

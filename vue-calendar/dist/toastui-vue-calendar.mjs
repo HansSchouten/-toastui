@@ -6564,7 +6564,7 @@ var Day$2 = /* @__PURE__ */ ((Day2) => {
   Day2[Day2["SAT"] = 6] = "SAT";
   return Day2;
 })(Day$2 || {});
-const WEEK_DAYS = 7;
+const WEEK_DAYS = 28;
 const dateFormatRx = /^(\d{4}[-|/]*\d{2}[-|/]*\d{2})\s?(\d{2}:\d{2}:\d{2})?$/;
 const memo = {
   millisecondsTo: {},
